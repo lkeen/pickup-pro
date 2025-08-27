@@ -20,8 +20,8 @@ Find nearby courts, host games, join rosters (auto-capped), and track post-game 
 
 ### **Frontend**
 - 🖼️ **Templating:** Flask Jinja (server-rendered pages)  
-- 🗺️ **Maps:** Leaflet.js *(optional)*  
-- 📈 **Charts:** Chart.js *(optional)*  
+- 🗺️ **Maps:** Leaflet.js  
+- 📈 **Charts:** Chart.js  
 - 🎨 **Styling:** Vanilla CSS  
 - 📡 **Client requests:** Fetch API  
 
