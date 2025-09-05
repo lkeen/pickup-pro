@@ -1,39 +1,20 @@
 {% extends "base.html" %}
-
-{% block body%}
-<div class= "container">
-    <h1>Welcome</h1>
-    <form id="auth-form" action"{{url_for('login')}}"method="post">
-    <form action="">
-        <input
-            type="text"
-            name="username"
-            placeholder="username"
-            class="input-field"
-            />
-        <input
-            type="text"
-            name="password"
-            placeholder="password"
-            class="input-field"
-            />
-        <input type="submit" value="Login" class="btn btn-login"/>
-        <input type="button" value="Register" class="btn btn-login"/>
-    </form>
+{% block body %}
+<div class="container">
+  {% if error %}<p style="color:red">{{ error }}</p>{% endif %}
+  <h1>Welcome</h1>
+  <form id="auth-form" method="post" action="{{ url_for('login') }}">
+    <input type="text" name="username" placeholder="username" class="input-field" />
+    <input type="password" name="password" placeholder="password" class="input-field" />
+    <input type="submit" value="Login" class="btn btn-login" />
+    <button type="button" class="btn btn-login" onclick="switchToRegister()">Register</button>
+  </form>
 </div>
-
 <script>
-    function setActionForm(form){
-        let form = document.getElementById("auth-form");
-        if(action == 'login'){
-            form.action = "{{url_for('login')}}"
-            form.method = "post"
-            form.submit();
-        } else if (action == "register"){
-            form.action = "{{url_for('register')}}"
-            form.method = "post"
-            form.submit();
-        }
-    }
+function switchToRegister(){
+  const form = document.getElementById("auth-form");
+  form.action = "{{ url_for('register') }}";
+  form.submit();
+}
 </script>
-{%  endblock %}
+{% endblock %}
