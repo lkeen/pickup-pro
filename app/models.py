@@ -11,6 +11,10 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(254), unique = True, nullable = False)
     created_at = db.Column(db.DateTime, default = datetime.now)
 
+    courts = db.relationship('Court', backref='creator', lazy=True)
+    hosted_games = db.relationship('Game', backref='host', lazy=True)
+    games = db.relationship('Game', secondary='game_players', back_populates='players')
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -25,6 +29,9 @@ class Court(db.Model):
     lat = db.Column(db.Float, nullable = False)
     lng = db.Column(db.Float, nullable = False)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable = False)
+    created_at = db.Column(db.DateTime, default = datetime.now)
+
+    games = db.relationship('Game', backref='court', lazy=True)
 
 class Game(db.Model):
     __tablename__ = "games"
@@ -33,6 +40,21 @@ class Game(db.Model):
     host_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable = False)
     time = db.Column(db.DateTime, nullable = False)
     max_players = db.Column(db.Integer, default = 10)
+    created_at = db.Column(db.DateTime, default = datetime.now)
+
+    players = db.relationship('User', secondary='game_players', back_populates='games')
+
+    @property
+    def current_players(self):
+        return len(self.players)
+
+    @property
+    def spots_available(self):
+        return self.max_players - self.current_players
+
+    def can_join(self, user):
+        return (self.current_players < self.max_players and
+                user not in self.players)
 
 class GamePlayer(db.Model):
     __tablename__ = "game_players"

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block body %}
+<h1>Create New Court</h1>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="alert">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<form method="POST">
+    <div>
+        <label for="name">Court Name:</label>
+        <input type="text" id="name" name="name" required>
+    </div>
+
+    <div>
+        <label for="address">Address:</label>
+        <input type="text" id="address" name="address" required>
+    </div>
+
+    <div>
+        <label for="lat">Latitude:</label>
+        <input type="number" step="any" id="lat" name="lat" required>
+    </div>
+
+    <div>
+        <label for="lng">Longitude:</label>
+        <input type="number" step="any" id="lng" name="lng" required>
+    </div>
+
+    <button type="submit">Create Court</button>
+</form>
+
+<a href="{{ url_for('courts') }}">Back to Courts</a>
+{% endblock %}

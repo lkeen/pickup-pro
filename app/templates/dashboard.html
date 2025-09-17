@@ -2,6 +2,17 @@
 {% block body %}
 <div class="container">
   <h1>Welcome, {{ username }}!</h1>
+
+  <nav>
+    <h2>Navigation</h2>
+    <ul>
+      <li><a href="{{ url_for('courts') }}">View Courts</a></li>
+      <li><a href="{{ url_for('create_court') }}">Create New Court</a></li>
+      <li><a href="{{ url_for('games') }}">View Games</a></li>
+      <li><a href="{{ url_for('create_game') }}">Create New Game</a></li>
+    </ul>
+  </nav>
+
   <a href="{{ url_for('logout') }}" class="btn btn-logout">Logout</a>
 </div>
 {% endblock %}

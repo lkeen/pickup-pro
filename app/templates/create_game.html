@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block body %}
+<h1>Create New Game</h1>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="alert">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<form method="POST">
+    <div>
+        <label for="court_id">Court:</label>
+        <select id="court_id" name="court_id" required>
+            <option value="">Select a court</option>
+            {% for court in courts %}
+                <option value="{{ court.id }}">{{ court.name }} - {{ court.address }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div>
+        <label for="time">Date and Time:</label>
+        <input type="datetime-local" id="time" name="time" required>
+    </div>
+
+    <div>
+        <label for="max_players">Max Players:</label>
+        <input type="number" id="max_players" name="max_players" value="10" min="2" max="20" required>
+    </div>
+
+    <button type="submit">Create Game</button>
+</form>
+
+<a href="{{ url_for('games') }}">Back to Games</a>
+{% endblock %}

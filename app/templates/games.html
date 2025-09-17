@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block body %}
+<h1>Basketball Games</h1>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="alert">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<a href="{{ url_for('create_game') }}">Create New Game</a>
+<a href="{{ url_for('courts') }}">View Courts</a>
+<a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+
+<h2>Filter Games</h2>
+<form method="GET">
+    <select name="court_id">
+        <option value="">All Courts</option>
+        {% for court in courts %}
+            <option value="{{ court.id }}" {% if request.args.get('court_id') == court.id|string %}selected{% endif %}>
+                {{ court.name }}
+            </option>
+        {% endfor %}
+    </select>
+
+    <input type="date" name="date" value="{{ request.args.get('date', '') }}">
+
+    <button type="submit">Filter</button>
+    <a href="{{ url_for('games') }}">Clear Filters</a>
+</form>
+
+<h2>Available Games</h2>
+{% if games %}
+    <table>
+        <thead>
+            <tr>
+                <th>Court</th>
+                <th>Date/Time</th>
+                <th>Host</th>
+                <th>Players</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in games %}
+            <tr>
+                <td>{{ game.court.name }}</td>
+                <td>{{ game.time.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{{ game.host.username }}</td>
+                <td>{{ game.current_players }}/{{ game.max_players }}</td>
+                <td>
+                    {% if current_user in game.players %}
+                        <form method="POST" action="{{ url_for('leave_game', game_id=game.id) }}" style="display: inline;">
+                            <button type="submit">Leave Game</button>
+                        </form>
+                    {% elif game.can_join(current_user) %}
+                        <form method="POST" action="{{ url_for('join_game', game_id=game.id) }}" style="display: inline;">
+                            <button type="submit">Join Game</button>
+                        </form>
+                    {% else %}
+                        <span>Full</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>No games available. <a href="{{ url_for('create_game') }}">Create the first one!</a></p>
+{% endif %}
+{% endblock %}

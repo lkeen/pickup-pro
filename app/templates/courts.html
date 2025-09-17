@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block body %}
+<h1>Basketball Courts</h1>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="alert">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<a href="{{ url_for('create_court') }}">Create New Court</a>
+<a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+
+<h2>Available Courts</h2>
+{% if courts %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Address</th>
+                <th>Created By</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for court in courts %}
+            <tr>
+                <td>{{ court.name }}</td>
+                <td>{{ court.address }}</td>
+                <td>{{ court.creator.username }}</td>
+                <td>
+                    <a href="{{ url_for('games', court_id=court.id) }}">View Games</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>No courts available. <a href="{{ url_for('create_court') }}">Create the first one!</a></p>
+{% endif %}
+{% endblock %}
