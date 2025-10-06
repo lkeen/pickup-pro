@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block body %}
+<h1>Game Details</h1>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="alert">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<a href="{{ url_for('games') }}">Back to Games</a>
+
+<h2>Game Information</h2>
+<table>
+    <tr><td><strong>Court:</strong></td><td>{{ game.court.name }}</td></tr>
+    <tr><td><strong>Address:</strong></td><td>{{ game.court.address }}</td></tr>
+    <tr><td><strong>Date/Time:</strong></td><td>{{ game.time.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+    <tr><td><strong>Host:</strong></td><td>{{ game.host.username }}</td></tr>
+    <tr><td><strong>Players:</strong></td><td>{{ game.current_players }}/{{ game.max_players }}</td></tr>
+</table>
+
+<h2>Roster</h2>
+{% if game.players %}
+    <table>
+        <thead>
+            <tr>
+                <th>Player</th>
+                {% if is_rostered %}
+                    <th>Points</th>
+                    <th>Rebounds</th>
+                    <th>Assists</th>
+                    <th>Your Rating</th>
+                    <th>Actions</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for player in game.players %}
+            <tr>
+                <td><a href="{{ url_for('user_profile', user_id=player.id) }}">{{ player.username }}</a></td>
+                {% if is_rostered %}
+                    <td>{{ stats_dict.get(player.id).points if stats_dict.get(player.id) else 0 }}</td>
+                    <td>{{ stats_dict.get(player.id).rebounds if stats_dict.get(player.id) else 0 }}</td>
+                    <td>{{ stats_dict.get(player.id).assists if stats_dict.get(player.id) else 0 }}</td>
+                    <td>
+                        {% if ratings_dict.get(player.id) %}
+                            {{ ratings_dict.get(player.id).rating }}/5
+                        {% elif player.id != current_user.id %}
+                            Not rated
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if player.id != current_user.id %}
+                            <button onclick="openStatsModal({{ player.id }}, '{{ player.username }}', {{ stats_dict.get(player.id).points if stats_dict.get(player.id) else 0 }}, {{ stats_dict.get(player.id).rebounds if stats_dict.get(player.id) else 0 }}, {{ stats_dict.get(player.id).assists if stats_dict.get(player.id) else 0 }})">Update Stats</button>
+                            <button onclick="openRatingModal({{ player.id }}, '{{ player.username }}', {{ ratings_dict.get(player.id).rating if ratings_dict.get(player.id) else 0 }}, '{{ ratings_dict.get(player.id).comment if ratings_dict.get(player.id) else '' }}')">Rate Player</button>
+                        {% else %}
+                            <button onclick="openStatsModal({{ player.id }}, '{{ player.username }}', {{ stats_dict.get(player.id).points if stats_dict.get(player.id) else 0 }}, {{ stats_dict.get(player.id).rebounds if stats_dict.get(player.id) else 0 }}, {{ stats_dict.get(player.id).assists if stats_dict.get(player.id) else 0 }})">Update My Stats</button>
+                        {% endif %}
+                    </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>No players have joined this game yet.</p>
+{% endif %}
+
+{% if not is_rostered %}
+    <p><em>You must be rostered to submit stats and rate players.</em></p>
+{% endif %}
+
+<!-- Stats Modal -->
+{% if is_rostered %}
+<div id="statsModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border:1px solid #ccc; z-index:1000;">
+    <h3>Update Stats for <span id="statsPlayerName"></span></h3>
+    <form method="POST" action="{{ url_for('submit_stats', game_id=game.id) }}">
+        <input type="hidden" id="statsUserId" name="user_id">
+
+        <label>Points:</label>
+        <input type="number" id="statsPoints" name="points" min="0" value="0"><br><br>
+
+        <label>Rebounds:</label>
+        <input type="number" id="statsRebounds" name="rebounds" min="0" value="0"><br><br>
+
+        <label>Assists:</label>
+        <input type="number" id="statsAssists" name="assists" min="0" value="0"><br><br>
+
+        <button type="submit">Save Stats</button>
+        <button type="button" onclick="closeStatsModal()">Cancel</button>
+    </form>
+</div>
+
+<!-- Rating Modal -->
+<div id="ratingModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border:1px solid #ccc; z-index:1000;">
+    <h3>Rate <span id="ratingPlayerName"></span></h3>
+    <form method="POST" action="{{ url_for('submit_rating', game_id=game.id) }}">
+        <input type="hidden" id="ratingUserId" name="to_user_id">
+
+        <label>Rating (1-5):</label>
+        <select id="ratingScore" name="rating" required>
+            <option value="">Select rating</option>
+            <option value="1">1 - Poor</option>
+            <option value="2">2 - Below Average</option>
+            <option value="3">3 - Average</option>
+            <option value="4">4 - Good</option>
+            <option value="5">5 - Excellent</option>
+        </select><br><br>
+
+        <label>Comment (optional):</label><br>
+        <textarea id="ratingComment" name="comment" rows="3" cols="50"></textarea><br><br>
+
+        <button type="submit">Save Rating</button>
+        <button type="button" onclick="closeRatingModal()">Cancel</button>
+    </form>
+</div>
+
+<!-- Modal Overlay -->
+<div id="modalOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999;" onclick="closeModals()"></div>
+
+<script>
+function openStatsModal(userId, username, points, rebounds, assists) {
+    document.getElementById('statsUserId').value = userId;
+    document.getElementById('statsPlayerName').textContent = username;
+    document.getElementById('statsPoints').value = points;
+    document.getElementById('statsRebounds').value = rebounds;
+    document.getElementById('statsAssists').value = assists;
+    document.getElementById('statsModal').style.display = 'block';
+    document.getElementById('modalOverlay').style.display = 'block';
+}
+
+function openRatingModal(userId, username, rating, comment) {
+    document.getElementById('ratingUserId').value = userId;
+    document.getElementById('ratingPlayerName').textContent = username;
+    document.getElementById('ratingScore').value = rating || '';
+    document.getElementById('ratingComment').value = comment || '';
+    document.getElementById('ratingModal').style.display = 'block';
+    document.getElementById('modalOverlay').style.display = 'block';
+}
+
+function closeStatsModal() {
+    document.getElementById('statsModal').style.display = 'none';
+    document.getElementById('modalOverlay').style.display = 'none';
+}
+
+function closeRatingModal() {
+    document.getElementById('ratingModal').style.display = 'none';
+    document.getElementById('modalOverlay').style.display = 'none';
+}
+
+function closeModals() {
+    closeStatsModal();
+    closeRatingModal();
+}
+</script>
+{% endif %}
+
+{% endblock %}

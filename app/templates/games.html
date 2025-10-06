@@ -54,6 +54,7 @@
                 <td>{{ game.host.username }}</td>
                 <td>{{ game.current_players }}/{{ game.max_players }}</td>
                 <td>
+                    <a href="{{ url_for('game_detail', game_id=game.id) }}">View Details</a>
                     {% if current_user in game.players %}
                         <form method="POST" action="{{ url_for('leave_game', game_id=game.id) }}" style="display: inline;">
                             <button type="submit">Leave Game</button>

@@ -6,6 +6,7 @@
   <nav>
     <h2>Navigation</h2>
     <ul>
+      <li><a href="{{ url_for('user_profile', user_id=current_user.id) }}">My Profile & Stats</a></li>
       <li><a href="{{ url_for('courts') }}">View Courts</a></li>
       <li><a href="{{ url_for('create_court') }}">Create New Court</a></li>
       <li><a href="{{ url_for('games') }}">View Games</a></li>

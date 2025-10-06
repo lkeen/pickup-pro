@@ -5,12 +5,14 @@ from dotenv import load_dotenv
 from sqlalchemy import text
 from flask_login import login_user, logout_user, login_required, current_user
 from app.extensions import db, migrate, login_mgr
+
+# Load environment variables first
+load_dotenv()
+
 from config import DevelopmentConfig
-from app.models import User, Court, Game, GamePlayer  
+from app.models import User, Court, Game, GamePlayer, PlayerStats, PlayerRating
 
 def create_app():
-    load_dotenv()
-
     app = Flask(__name__)
     app.config.from_object(DevelopmentConfig)
 
@@ -201,6 +203,180 @@ def create_app():
         db.session.commit()
         flash("Successfully left the game!")
         return redirect(url_for("games"))
+
+    # Game details with stats and ratings
+    @app.route("/games/<int:game_id>")
+    @login_required
+    def game_detail(game_id):
+        game = Game.query.get_or_404(game_id)
+        is_rostered = current_user in game.players
+
+        # Get current stats for this game
+        player_stats = PlayerStats.query.filter_by(game_id=game_id).all()
+        stats_dict = {stat.user_id: stat for stat in player_stats}
+
+        # Get current ratings for this game (that current user has given)
+        my_ratings = PlayerRating.query.filter_by(
+            game_id=game_id,
+            from_user_id=current_user.id
+        ).all()
+        ratings_dict = {rating.to_user_id: rating for rating in my_ratings}
+
+        return render_template("game_detail.html",
+                             game=game,
+                             is_rostered=is_rostered,
+                             stats_dict=stats_dict,
+                             ratings_dict=ratings_dict)
+
+    # Submit/update stats for a player in a game
+    @app.route("/games/<int:game_id>/stats", methods=["POST"])
+    @login_required
+    def submit_stats(game_id):
+        game = Game.query.get_or_404(game_id)
+
+        # Only rostered players can submit stats
+        if current_user not in game.players:
+            flash("Only rostered players can submit stats.")
+            return redirect(url_for("game_detail", game_id=game_id))
+
+        user_id = request.form.get("user_id")
+        points = request.form.get("points", 0)
+        rebounds = request.form.get("rebounds", 0)
+        assists = request.form.get("assists", 0)
+
+        try:
+            user_id = int(user_id)
+            points = int(points) if points else 0
+            rebounds = int(rebounds) if rebounds else 0
+            assists = int(assists) if assists else 0
+        except ValueError:
+            flash("Invalid stats values.")
+            return redirect(url_for("game_detail", game_id=game_id))
+
+        # Check if stats already exist
+        existing_stats = PlayerStats.query.filter_by(
+            game_id=game_id,
+            user_id=user_id
+        ).first()
+
+        if existing_stats:
+            existing_stats.points = points
+            existing_stats.rebounds = rebounds
+            existing_stats.assists = assists
+            existing_stats.updated_at = datetime.now()
+        else:
+            new_stats = PlayerStats(
+                game_id=game_id,
+                user_id=user_id,
+                points=points,
+                rebounds=rebounds,
+                assists=assists
+            )
+            db.session.add(new_stats)
+
+        db.session.commit()
+        flash("Stats updated successfully!")
+        return redirect(url_for("game_detail", game_id=game_id))
+
+    # Submit/update rating for a player in a game
+    @app.route("/games/<int:game_id>/rate", methods=["POST"])
+    @login_required
+    def submit_rating(game_id):
+        game = Game.query.get_or_404(game_id)
+
+        # Only rostered players can rate
+        if current_user not in game.players:
+            flash("Only rostered players can rate others.")
+            return redirect(url_for("game_detail", game_id=game_id))
+
+        to_user_id = request.form.get("to_user_id")
+        rating = request.form.get("rating")
+        comment = request.form.get("comment", "").strip()
+
+        try:
+            to_user_id = int(to_user_id)
+            rating = int(rating)
+        except ValueError:
+            flash("Invalid rating values.")
+            return redirect(url_for("game_detail", game_id=game_id))
+
+        # Prevent self-rating
+        if to_user_id == current_user.id:
+            flash("You cannot rate yourself.")
+            return redirect(url_for("game_detail", game_id=game_id))
+
+        # Validate rating range
+        if rating < 1 or rating > 5:
+            flash("Rating must be between 1 and 5.")
+            return redirect(url_for("game_detail", game_id=game_id))
+
+        # Check if rating already exists
+        existing_rating = PlayerRating.query.filter_by(
+            game_id=game_id,
+            from_user_id=current_user.id,
+            to_user_id=to_user_id
+        ).first()
+
+        if existing_rating:
+            existing_rating.rating = rating
+            existing_rating.comment = comment
+        else:
+            new_rating = PlayerRating(
+                game_id=game_id,
+                from_user_id=current_user.id,
+                to_user_id=to_user_id,
+                rating=rating,
+                comment=comment
+            )
+            db.session.add(new_rating)
+
+        db.session.commit()
+        flash("Rating submitted successfully!")
+        return redirect(url_for("game_detail", game_id=game_id))
+
+    # User profile with lifetime stats and ratings
+    @app.route("/users/<int:user_id>")
+    @login_required
+    def user_profile(user_id):
+        user = User.query.get_or_404(user_id)
+
+        # Calculate lifetime stats aggregations
+        stats_query = db.session.query(
+            db.func.count(PlayerStats.id).label('games_played'),
+            db.func.sum(PlayerStats.points).label('total_points'),
+            db.func.sum(PlayerStats.rebounds).label('total_rebounds'),
+            db.func.sum(PlayerStats.assists).label('total_assists'),
+            db.func.avg(PlayerStats.points).label('avg_points'),
+            db.func.avg(PlayerStats.rebounds).label('avg_rebounds'),
+            db.func.avg(PlayerStats.assists).label('avg_assists')
+        ).filter(PlayerStats.user_id == user_id).first()
+
+        # Calculate average rating received
+        rating_query = db.session.query(
+            db.func.count(PlayerRating.id).label('total_ratings'),
+            db.func.avg(PlayerRating.rating).label('avg_rating')
+        ).filter(PlayerRating.to_user_id == user_id).first()
+
+        # Get recent games with stats
+        recent_games = db.session.query(Game, PlayerStats).join(
+            PlayerStats, PlayerStats.game_id == Game.id
+        ).filter(PlayerStats.user_id == user_id).order_by(
+            Game.time.desc()
+        ).limit(10).all()
+
+        # Get recent ratings received
+        recent_ratings = db.session.query(PlayerRating, User).join(
+            User, User.id == PlayerRating.from_user_id
+        ).filter(PlayerRating.to_user_id == user_id).order_by(
+            PlayerRating.created_at.desc()
+        ).limit(10).all()
+
+        return render_template("user_profile.html",
+                             user=user,
+                             stats=stats_query,
+                             ratings=rating_query,
+                             recent_games=recent_games,
+                             recent_ratings=recent_ratings)
 
     # Ensure models are imported so Alembic sees them
     from app import models

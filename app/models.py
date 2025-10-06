@@ -70,13 +70,30 @@ class PlayerStats(db.Model):
     points = db.Column(db.Integer, default = 0)
     rebounds = db.Column(db.Integer, default = 0)
     assists = db.Column(db.Integer, default = 0)
+    created_at = db.Column(db.DateTime, default = datetime.now)
+    updated_at = db.Column(db.DateTime, default = datetime.now, onupdate = datetime.now)
 
-class PlayerRatings(db.Model):
+    game = db.relationship('Game', backref='player_stats')
+    user = db.relationship('User', backref='player_stats')
+
+    __table_args__ = (db.UniqueConstraint('game_id', 'user_id', name='unique_game_user_stats'),)
+
+class PlayerRating(db.Model):
     __tablename__ = "player_ratings"
     id = db.Column(db.Integer, primary_key = True)
-    from_user = db.Column(db.Integer, db.ForeignKey("users.id"), nullable = False)
-    to_user = db.Column(db.Integer, db.ForeignKey("users.id"), nullable = False)
+    from_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable = False)
+    to_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable = False)
     game_id = db.Column(db.Integer, db.ForeignKey("games.id"), nullable = False)
-    score = db.Column(db.Integer, nullable = False)
+    rating = db.Column(db.Integer, nullable = False)
     comment = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default = datetime.now)
+
+    game = db.relationship('Game', backref='player_ratings')
+    from_user = db.relationship('User', foreign_keys=[from_user_id], backref='ratings_given')
+    to_user = db.relationship('User', foreign_keys=[to_user_id], backref='ratings_received')
+
+    __table_args__ = (
+        db.UniqueConstraint('from_user_id', 'to_user_id', 'game_id', name='unique_game_user_rating'),
+        db.CheckConstraint('rating >= 1 AND rating <= 5', name='rating_range'),
+        db.CheckConstraint('from_user_id != to_user_id', name='no_self_rating')
+    )
