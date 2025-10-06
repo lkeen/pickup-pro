@@ -5,7 +5,7 @@ Find nearby courts, host games, join rosters (auto-capped), and track post-game 
 
 ---
 
-## 📌 Features
+## Features
 
 - **Court discovery** with lat/lng & radius search (Haversine)  
 - **Host, join, and leave games**   
@@ -16,7 +16,7 @@ Find nearby courts, host games, join rosters (auto-capped), and track post-game 
 
 ---
 
-## 💻 Tech Stack
+## Tech Stack
 
 ### **Frontend**
 - **Templating:** Flask Jinja (server-rendered pages)  
@@ -36,4 +36,5 @@ Find nearby courts, host games, join rosters (auto-capped), and track post-game 
 
 ---
 
-Future roadmap: add notifications, polish UI with Tailwind/Leaflet, and improve real-time updates.
+Future roadmap: Implement Frontend, add notifications, polish UI with Tailwind/Leaflet, and improve real-time updates.
+
