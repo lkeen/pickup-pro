@@ -19,7 +19,7 @@ Find nearby courts, host games, join rosters (auto-capped), and track post-game 
 ## Tech Stack
 
 ### **Frontend**
-- **Templating:** Flask Jinja (server-rendered pages)  
+- **Templating:** Flask Jinja  
 - **Maps:** Leaflet.js   
 - **Charts:** Chart.js 
 - **Styling:** Vanilla CSS  
@@ -32,9 +32,10 @@ Find nearby courts, host games, join rosters (auto-capped), and track post-game 
 - **Auth:** Flask-Login + Werkzeug password hashing    
 
 ### **Database**
-- **Primary:** MySQL    
+- **Primary:** PostgreSQL    
 
 ---
 
 Future roadmap: Implement Frontend, add notifications, polish UI with Tailwind/Leaflet, and improve real-time updates.
+
 
