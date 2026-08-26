@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
 from app.forms import ConfirmForm, GameForm, RatingForm, StatsForm
@@ -18,7 +19,18 @@ def index():
     court_id = request.args.get("court_id")
     date = request.args.get("date")
 
-    query = Game.query
+    # Without these the template triggers a query per row for each of
+    # game.court, game.host, game.players and game.can_join() -- roughly 4N
+    # extra round trips to render N rows.
+    #
+    # joinedload for the many-to-one sides (one row each, cheap to widen the
+    # join); selectinload for the roster, where a join would multiply the
+    # result set by the number of players.
+    query = Game.query.options(
+        joinedload(Game.court),
+        joinedload(Game.host),
+        selectinload(Game.players),
+    )
     if court_id:
         query = query.filter_by(court_id=court_id)
     if date:

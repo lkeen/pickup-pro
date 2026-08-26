@@ -89,6 +89,7 @@ class Court(db.Model):
         # migration rather than by metadata: it is built CONCURRENTLY, which
         # cannot happen inside a transaction.
         db.Index('ix_courts_geog', 'geog', postgresql_using='gist'),
+        db.Index('ix_courts_created_by', 'created_by'),
     )
 
 class Game(db.Model):
@@ -101,6 +102,17 @@ class Game(db.Model):
     created_at = db.Column(db.DateTime, default = datetime.now)
 
     players = db.relationship('User', secondary='game_players', back_populates='games')
+
+    __table_args__ = (
+        db.Index('ix_games_court_id', 'court_id'),
+        db.Index('ix_games_host_id', 'host_id'),
+        # Every listing filters or orders on time. The nearby-search plan showed
+        # a sequential scan over 75,000 games because of its absence.
+        db.Index('ix_games_time', 'time'),
+        # Serves the common "games at this court on this day" filter with one
+        # index rather than two lookups intersected.
+        db.Index('ix_games_court_id_time', 'court_id', 'time'),
+    )
 
     @property
     def current_players(self):
@@ -120,6 +132,12 @@ class GamePlayer(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key = True)
     joined_at = db.Column(db.DateTime, default = datetime.now)
 
+    __table_args__ = (
+        # game_id already leads the composite primary key; user_id does not, so
+        # "which games is this user in" has no index to use.
+        db.Index('ix_game_players_user_id', 'user_id'),
+    )
+
 class PlayerStats(db.Model):
     __tablename__ = "player_stats"
     id = db.Column(db.Integer, primary_key = True)
@@ -134,7 +152,12 @@ class PlayerStats(db.Model):
     game = db.relationship('Game', backref='player_stats')
     user = db.relationship('User', backref='player_stats')
 
-    __table_args__ = (db.UniqueConstraint('game_id', 'user_id', name='unique_game_user_stats'),)
+    __table_args__ = (
+        db.UniqueConstraint('game_id', 'user_id', name='unique_game_user_stats'),
+        # The unique constraint's index leads with game_id, so profile
+        # aggregations filtering on user_id alone cannot use it.
+        db.Index('ix_player_stats_user_id', 'user_id'),
+    )
 
 class PlayerRating(db.Model):
     __tablename__ = "player_ratings"
@@ -154,6 +177,10 @@ class PlayerRating(db.Model):
         db.UniqueConstraint(
             'from_user_id', 'to_user_id', 'game_id', name='unique_game_user_rating'
         ),
+        # The unique index leads with from_user_id, so neither "ratings for this
+        # game" nor "ratings received by this user" can use it.
+        db.Index('ix_player_ratings_game_id', 'game_id'),
+        db.Index('ix_player_ratings_to_user_id', 'to_user_id'),
         db.CheckConstraint('rating >= 1 AND rating <= 5', name='rating_range'),
         db.CheckConstraint('from_user_id != to_user_id', name='no_self_rating')
     )

@@ -171,6 +171,37 @@ def csrf_token_from(html):
 
 
 @pytest.fixture()
+def query_counter(app):
+    """Count SELECT statements issued during a block.
+
+    Used to pin N+1 behaviour: the assertion that matters is that the count does
+    not grow with the number of rows, not that it equals any particular number.
+    """
+    from sqlalchemy import event
+
+    class Counter:
+        def __init__(self):
+            self.count = 0
+
+        def reset(self):
+            self.count = 0
+
+    counter = Counter()
+
+    def _on_execute(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            counter.count += 1
+
+    with app.app_context():
+        engine = _db.engine
+    event.listen(engine, "before_cursor_execute", _on_execute)
+    try:
+        yield counter
+    finally:
+        event.remove(engine, "before_cursor_execute", _on_execute)
+
+
+@pytest.fixture()
 def login(client):
     """Authenticate the test client by actually logging in.
 
