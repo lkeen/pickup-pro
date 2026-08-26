@@ -94,3 +94,10 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://pickup_user:pickup_password@localhost:5432/pickup_pro
         run: pytest --cov=app --cov-report=term-missing
+
+      - name: Benchmark sanity check
+        env:
+          DATABASE_URL: postgresql+psycopg://pickup_user:pickup_password@localhost:5432/pickup_pro
+        # A small run, for the assertion rather than the timings: all three
+        # implementations must return the same games.
+        run: python benchmarks/bench_nearby.py --courts 2000 --games 5000 --runs 1

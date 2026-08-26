@@ -24,6 +24,9 @@ def create_app(config_name=None):
     config_class.validate()
     app.config.from_object(config_class)
 
+    from app.logging import configure as configure_logging
+
+    configure_logging(app)
     register_extensions(app)
     register_template_helpers(app)
     register_blueprints(app)
