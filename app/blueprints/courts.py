@@ -6,6 +6,7 @@ from flask_login import current_user, login_required
 from app.extensions import db
 from app.forms import CourtForm
 from app.models import Court
+from app.services.geo import invalidate_area
 
 bp = Blueprint("courts", __name__, url_prefix="/courts")
 
@@ -31,6 +32,9 @@ def create():
         )
         db.session.add(court)
         db.session.commit()
+        # A cached search covering this location would not include the new
+        # court. Drop those entries rather than serve them for the TTL.
+        invalidate_area(court.lat, court.lng)
         flash("Court created successfully!")
         return redirect(url_for("courts.index"))
 

@@ -20,6 +20,8 @@ from sqlalchemy import func
 
 from app.extensions import db
 from app.models import Court, Game
+from app.services import caching
+from app.services.geohash import cell_for, cells_covering, encode
 from app.timeutils import to_utc, utcnow
 
 # Bounds for user-supplied search parameters.
@@ -126,3 +128,41 @@ def serialize(game, court, distance_m):
         "distance_km": round(distance_m / METRES_PER_KM, 2),
         "host_id": game.host_id,
     }
+
+
+# --- caching ---------------------------------------------------------------
+
+NEARBY_TTL_SECONDS = 120
+
+
+def nearby_cache_key(lat, lng, radius_km, date):
+    """Quantise the search so repeated lookups from one place collide.
+
+    Raw coordinates out of a browser's geolocation never repeat, so keying on
+    them gives a hit rate of roughly zero. The geohash cell and the rounded
+    radius are both approximations of the caller's request -- tens of metres,
+    which does not matter for "games near me" -- and that is the trade being
+    made for a cache that actually hits.
+    """
+    return caching.make_key(
+        "nearby",
+        cell=encode(lat, lng),
+        radius=round(radius_km, 1),
+        date=date.isoformat() if date else "upcoming",
+    )
+
+
+def nearby_cache_tags(lat, lng, radius_km):
+    """The grid cells this search could draw results from."""
+    return tuple(cells_covering(lat, lng, radius_km))
+
+
+def invalidate_area(lat, lng):
+    """Drop cached searches that could have included this location.
+
+    Called whenever something a nearby result reports changes: a new court, a
+    new game, or a roster change -- the response carries current_players and
+    spots_available, so a join makes every cached search covering that court
+    wrong.
+    """
+    return caching.invalidate(cell_for(lat, lng))

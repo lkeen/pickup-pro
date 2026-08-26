@@ -10,7 +10,16 @@ from flask_login import login_required
 from sqlalchemy.orm import selectinload
 
 from app.models import Game
-from app.services.geo import InvalidSearch, nearby_games, serialize, validate_search
+from app.services import caching
+from app.services.geo import (
+    NEARBY_TTL_SECONDS,
+    InvalidSearch,
+    nearby_cache_key,
+    nearby_cache_tags,
+    nearby_games,
+    serialize,
+    validate_search,
+)
 
 bp = Blueprint("api", __name__, url_prefix="/api/v1")
 
@@ -28,18 +37,24 @@ def games_nearby():
     except InvalidSearch as exc:
         return jsonify({"error": str(exc)}), 400
 
-    rows = (
-        nearby_games(lat, lng, radius_km, date=date)
-        # serialize() reads game.current_players, which counts the roster. Without
-        # this the response costs one extra query per game returned.
-        .options(selectinload(Game.players))
-        .all()
-    )
-
-    return jsonify(
-        {
+    def compute():
+        rows = (
+            nearby_games(lat, lng, radius_km, date=date)
+            # serialize() reads game.current_players, which counts the roster.
+            # Without this the response costs one extra query per game returned.
+            .options(selectinload(Game.players))
+            .all()
+        )
+        return {
             "games": [serialize(game, court, distance_m) for game, court, distance_m in rows],
             "count": len(rows),
             "radius_km": radius_km,
         }
+
+    payload = caching.get_or_set(
+        nearby_cache_key(lat, lng, radius_km, date),
+        compute,
+        ttl=NEARBY_TTL_SECONDS,
+        tags=nearby_cache_tags(lat, lng, radius_km),
     )
+    return jsonify(payload)

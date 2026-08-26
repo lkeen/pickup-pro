@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.forms import ConfirmForm, GameForm, RatingForm, StatsForm
 from app.models import Court, Game, GamePlayer, PlayerRating, PlayerStats
+from app.services.geo import invalidate_area
 from app.timeutils import to_utc
 
 bp = Blueprint("games", __name__, url_prefix="/games")
@@ -65,6 +66,7 @@ def create():
         )
         db.session.add(game)
         db.session.commit()
+        _invalidate_searches_for(game)
         flash("Game created successfully!")
         return redirect(url_for("games.index"))
 
@@ -103,6 +105,9 @@ def join(game_id):
         flash("Cannot join this game (full or already joined).")
         return redirect(url_for("games.index"))
 
+    # The nearby response carries current_players and spots_available, so a
+    # roster change makes every cached search covering this court wrong.
+    _invalidate_searches_for(game)
     flash("Successfully joined the game!")
     return redirect(url_for("games.index"))
 
@@ -126,6 +131,7 @@ def leave(game_id):
 
     db.session.delete(game_player)
     db.session.commit()
+    _invalidate_searches_for(db.session.get(Game, game_id))
     flash("Successfully left the game!")
     return redirect(url_for("games.index"))
 
@@ -156,3 +162,12 @@ def detail(game_id):
         rating_form=RatingForm(),
         confirm_form=ConfirmForm(),
     )
+
+
+def _invalidate_searches_for(game):
+    """Drop cached nearby searches that could have included this game."""
+    if game is None:
+        return
+    court = game.court or db.session.get(Court, game.court_id)
+    if court is not None:
+        invalidate_area(court.lat, court.lng)
