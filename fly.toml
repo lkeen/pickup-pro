@@ -1,0 +1,54 @@
+# Fly.io deployment.
+#
+# Not deployed from this repository -- running it requires an account and
+# credentials. The steps, once `fly` is installed and authenticated:
+#
+#   fly launch --no-deploy --copy-config
+#   fly postgres create --name pickup-pro-db          # then: fly postgres attach
+#   fly redis create --name pickup-pro-cache          # then set REDIS_URL
+#   fly secrets set SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+#   fly secrets set APP_TIMEZONE=America/New_York
+#   fly deploy
+#
+# PostGIS: Fly's managed Postgres ships it, but the extension still has to be
+# created, which the migrations do on first boot.
+
+app = "pickup-pro"
+primary_region = "atl"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_ENV = "production"
+  PORT = "8000"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # Zero is fine for a portfolio app: it costs nothing while idle and the first
+  # request pays a few seconds of cold start.
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 40
+    hard_limit = 60
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+  method = "GET"
+  path = "/healthz"
+
+[deploy]
+  # Migrations run once per deploy rather than once per machine, so two machines
+  # starting together cannot run them concurrently.
+  release_command = "flask db upgrade"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

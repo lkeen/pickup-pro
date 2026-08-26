@@ -27,6 +27,7 @@ def create_app(config_name=None):
     register_extensions(app)
     register_template_helpers(app)
     register_blueprints(app)
+    register_health_check(app)
 
     return app
 
@@ -99,5 +100,25 @@ def register_template_helpers(app):
 
 def register_blueprints(app):
     from app.blueprints import register_blueprints as _register
+    from app.cli import bp as cli_bp
 
     _register(app)
+    app.register_blueprint(cli_bp)
+
+
+def register_health_check(app):
+    """A liveness endpoint for the container runtime and the load balancer.
+
+    Checks the database rather than only that Python is running: a process that
+    cannot reach its database should not be sent traffic.
+    """
+    from sqlalchemy import text
+
+    @app.route("/healthz")
+    def healthz():
+        try:
+            db.session.execute(text("SELECT 1"))
+        except Exception:
+            app.logger.exception("health check failed")
+            return {"status": "unhealthy"}, 503
+        return {"status": "ok"}
