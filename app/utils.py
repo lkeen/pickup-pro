@@ -1,5 +1,6 @@
 import math
 
+
 def haversine_distance(lat1, lng1, lat2, lng2):
     # Convert decimal degrees to radians
     lat1, lng1, lat2, lng2 = map(math.radians, [lat1, lng1, lat2, lng2])

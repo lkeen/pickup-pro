@@ -1,7 +1,10 @@
 from datetime import datetime
-from app.extensions import db
-from werkzeug.security import generate_password_hash, check_password_hash
+
 from flask_login import UserMixin
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from app.extensions import db
+
 
 class User(UserMixin, db.Model):
     __tablename__ = "users"
@@ -93,7 +96,9 @@ class PlayerRating(db.Model):
     to_user = db.relationship('User', foreign_keys=[to_user_id], backref='ratings_received')
 
     __table_args__ = (
-        db.UniqueConstraint('from_user_id', 'to_user_id', 'game_id', name='unique_game_user_rating'),
+        db.UniqueConstraint(
+            'from_user_id', 'to_user_id', 'game_id', name='unique_game_user_rating'
+        ),
         db.CheckConstraint('rating >= 1 AND rating <= 5', name='rating_range'),
         db.CheckConstraint('from_user_id != to_user_id', name='no_self_rating')
     )

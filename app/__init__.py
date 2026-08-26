@@ -10,8 +10,8 @@ from flask import Flask
 # at class-definition time.
 load_dotenv()
 
-from config import get_config  # noqa: E402
 from app.extensions import db, login_mgr, migrate  # noqa: E402
+from config import get_config  # noqa: E402
 
 
 def create_app(config_name=None):

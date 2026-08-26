@@ -25,8 +25,10 @@ def upgrade():
         batch_op.create_unique_constraint('unique_game_user_rating', ['from_user_id', 'to_user_id', 'game_id'])
         batch_op.drop_constraint(batch_op.f('player_ratings_from_user_fkey'), type_='foreignkey')
         batch_op.drop_constraint(batch_op.f('player_ratings_to_user_fkey'), type_='foreignkey')
-        batch_op.create_foreign_key(None, 'users', ['to_user_id'], ['id'])
-        batch_op.create_foreign_key(None, 'users', ['from_user_id'], ['id'])
+        batch_op.create_foreign_key(
+            'player_ratings_to_user_id_fkey', 'users', ['to_user_id'], ['id'])
+        batch_op.create_foreign_key(
+            'player_ratings_from_user_id_fkey', 'users', ['from_user_id'], ['id'])
         batch_op.drop_column('from_user')
         batch_op.drop_column('to_user')
         batch_op.drop_column('score')
@@ -50,8 +52,10 @@ def downgrade():
         batch_op.add_column(sa.Column('score', sa.INTEGER(), autoincrement=False, nullable=False))
         batch_op.add_column(sa.Column('to_user', sa.INTEGER(), autoincrement=False, nullable=False))
         batch_op.add_column(sa.Column('from_user', sa.INTEGER(), autoincrement=False, nullable=False))
-        batch_op.drop_constraint(None, type_='foreignkey')
-        batch_op.drop_constraint(None, type_='foreignkey')
+        batch_op.drop_constraint(
+            'player_ratings_from_user_id_fkey', type_='foreignkey')
+        batch_op.drop_constraint(
+            'player_ratings_to_user_id_fkey', type_='foreignkey')
         batch_op.create_foreign_key(batch_op.f('player_ratings_to_user_fkey'), 'users', ['to_user'], ['id'])
         batch_op.create_foreign_key(batch_op.f('player_ratings_from_user_fkey'), 'users', ['from_user'], ['id'])
         batch_op.drop_constraint('unique_game_user_rating', type_='unique')

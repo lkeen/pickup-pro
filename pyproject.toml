@@ -1,0 +1,38 @@
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+exclude = ["venv", "migrations/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # import sorting
+    "B",    # bugbear
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
+]
+# DTZ (naive datetime) is deliberately not enabled yet: every timestamp column in
+# this project is currently naive, and turning the rule on before the
+# timestamptz migration would mean 6 blanket noqa comments. It is enabled in the
+# branch that fixes them.
+
+[tool.ruff.lint.per-file-ignores]
+# The factory must call load_dotenv() before importing config, which reads
+# os.getenv at class-definition time.
+"app/__init__.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = [
+    # Our own deprecations are bugs; fail on them.
+    "error::DeprecationWarning:app.*",
+    # Model.query.get() is legacy in SQLAlchemy 2.0. It is replaced with
+    # db.session.get() in the roster-capacity branch; until then this stays a
+    # warning rather than an error so the debt is visible but not blocking.
+    "default::sqlalchemy.exc.LegacyAPIWarning",
+]
+markers = [
+    "slow: tests that take more than a second",
+]
