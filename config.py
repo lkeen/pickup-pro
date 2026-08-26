@@ -52,6 +52,9 @@ class DevelopmentConfig(BaseConfig):
 class TestingConfig(BaseConfig):
     TESTING = True
     DEBUG = False
+    # Off by default so tests exercise application logic rather than token
+    # plumbing. The CSRF regression tests turn it back on explicitly.
+    WTF_CSRF_ENABLED = False
     # Tests run against a real PostgreSQL database, not SQLite: the spatial
     # queries this project is built around have no SQLite equivalent.
     SQLALCHEMY_DATABASE_URI = os.getenv("TEST_DATABASE_URL") or (

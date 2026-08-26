@@ -6,6 +6,7 @@ from flask import Blueprint, flash, jsonify, redirect, render_template, request,
 from flask_login import current_user, login_required
 
 from app.extensions import db
+from app.forms import ConfirmForm, GameForm, RatingForm, StatsForm
 from app.models import Court, Game, GamePlayer, PlayerRating, PlayerStats
 from app.utils import haversine_distance
 
@@ -34,7 +35,9 @@ def index():
 
     games = query.order_by(Game.time).all()
     courts = Court.query.all()
-    return render_template("games.html", games=games, courts=courts)
+    return render_template(
+        "games.html", games=games, courts=courts, confirm_form=ConfirmForm()
+    )
 
 
 @bp.route("/nearby")
@@ -99,41 +102,30 @@ def nearby():
 @bp.route("/create", methods=["GET", "POST"])
 @login_required
 def create():
-    if request.method == "POST":
-        court_id = request.form.get("court_id")
-        time = request.form.get("time")
-        max_players = request.form.get("max_players", 10)
-
-        if not all([court_id, time]):
-            flash("Court and time are required.")
-            return render_template("create_game.html", courts=Court.query.all())
-
-        try:
-            time_obj = datetime.strptime(time, "%Y-%m-%dT%H:%M")
-            max_players = int(max_players)
-        except ValueError:
-            flash("Invalid time or player count.")
-            return render_template("create_game.html", courts=Court.query.all())
-
+    form = GameForm().set_court_choices(Court.query.all())
+    if form.validate_on_submit():
         game = Game(
-            court_id=court_id,
+            court_id=form.court_id.data,
             host_id=current_user.id,
-            time=time_obj,
-            max_players=max_players,
+            time=form.time.data,
+            max_players=form.max_players.data,
         )
         db.session.add(game)
         db.session.commit()
         flash("Game created successfully!")
         return redirect(url_for("games.index"))
 
-    courts = Court.query.all()
-    return render_template("create_game.html", courts=courts)
+    return render_template("create_game.html", form=form)
 
 
 @bp.route("/<int:game_id>/join", methods=["POST"])
 @login_required
 def join(game_id):
     game = Game.query.get_or_404(game_id)
+
+    if not ConfirmForm().validate_on_submit():
+        flash("Could not verify that request. Please try again.")
+        return redirect(url_for("games.index"))
 
     if not game.can_join(current_user):
         flash("Cannot join this game (full or already joined).")
@@ -149,7 +141,11 @@ def join(game_id):
 @bp.route("/<int:game_id>/leave", methods=["POST"])
 @login_required
 def leave(game_id):
-    game = Game.query.get_or_404(game_id)  # noqa: F841 - 404s on a missing game
+    Game.query.get_or_404(game_id)  # 404s on a missing game
+
+    if not ConfirmForm().validate_on_submit():
+        flash("Could not verify that request. Please try again.")
+        return redirect(url_for("games.index"))
 
     game_player = GamePlayer.query.filter_by(
         game_id=game_id, user_id=current_user.id
@@ -187,4 +183,7 @@ def detail(game_id):
         is_rostered=is_rostered,
         stats_dict=stats_dict,
         ratings_dict=ratings_dict,
+        stats_form=StatsForm(),
+        rating_form=RatingForm(),
+        confirm_form=ConfirmForm(),
     )

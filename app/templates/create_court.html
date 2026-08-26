@@ -14,24 +14,29 @@
 {% endwith %}
 
 <form method="POST">
+    {{ form.hidden_tag() }}
     <div>
         <label for="name">Court Name:</label>
-        <input type="text" id="name" name="name" required>
+        <input type="text" id="name" name="name" value="{{ form.name.data or '' }}" required>
+        {% for e in form.name.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
     </div>
 
     <div>
         <label for="address">Address:</label>
-        <input type="text" id="address" name="address" required>
+        <input type="text" id="address" name="address" value="{{ form.address.data or '' }}" required>
+        {% for e in form.address.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
     </div>
 
     <div>
         <label for="lat">Latitude:</label>
-        <input type="number" step="any" id="lat" name="lat" required>
+        <input type="number" step="any" id="lat" name="lat" value="{{ form.lat.data if form.lat.data is not none else '' }}" required>
+        {% for e in form.lat.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
     </div>
 
     <div>
         <label for="lng">Longitude:</label>
-        <input type="number" step="any" id="lng" name="lng" required>
+        <input type="number" step="any" id="lng" name="lng" value="{{ form.lng.data if form.lng.data is not none else '' }}" required>
+        {% for e in form.lng.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
     </div>
 
     <button type="submit">Create Court</button>

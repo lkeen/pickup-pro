@@ -57,10 +57,12 @@
                     <a href="{{ url_for('games.detail', game_id=game.id) }}">View Details</a>
                     {% if current_user in game.players %}
                         <form method="POST" action="{{ url_for('games.leave', game_id=game.id) }}" style="display: inline;">
+                            {{ confirm_form.hidden_tag() }}
                             <button type="submit">Leave Game</button>
                         </form>
                     {% elif game.can_join(current_user) %}
                         <form method="POST" action="{{ url_for('games.join', game_id=game.id) }}" style="display: inline;">
+                            {{ confirm_form.hidden_tag() }}
                             <button type="submit">Join Game</button>
                         </form>
                     {% else %}

@@ -9,6 +9,7 @@ every test run also proves the migration chain still applies cleanly.
 """
 
 import os
+import re
 
 import pytest
 from flask_migrate import upgrade as alembic_upgrade
@@ -40,25 +41,37 @@ def app():
         _db.session.remove()
 
 
+def _truncate_all_tables():
+    """Empty every model table, resetting identity sequences."""
+    tables = ", ".join(f'"{table.name}"' for table in _db.metadata.sorted_tables)
+    if not tables:
+        return
+    _db.session.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+    _db.session.commit()
+
+
 @pytest.fixture()
 def db(app):
-    """Wrap each test in a transaction that is rolled back afterwards.
+    """Give each test an empty database.
 
-    Faster than recreating the schema per test, and guarantees isolation even
-    when a test commits.
+    The obvious approach -- wrap the test in a transaction and roll it back --
+    does not work here. Flask-SQLAlchemy 3.1 scopes its session to the app
+    context, so the session inside a test-client request is a *different*
+    session on a *different* connection from the one the fixture set up. Any
+    commit made by a view would escape the fixture's transaction and leak into
+    the next test, which is exactly what happened: rows survived the rollback
+    and later tests failed on duplicate usernames.
+
+    Truncating afterwards is less clever but actually isolates. It also means
+    fixtures must commit rather than flush, since the data has to be visible to
+    a request running on another connection.
     """
     with app.app_context():
-        connection = _db.engine.connect()
-        transaction = connection.begin()
-        _db.session.remove()
-        _db.session.configure(bind=connection, join_transaction_mode="create_savepoint")
-
+        _truncate_all_tables()
         yield _db
-
+        _db.session.rollback()
+        _truncate_all_tables()
         _db.session.remove()
-        transaction.rollback()
-        connection.close()
-        _db.session.configure(bind=_db.engine)
 
 
 @pytest.fixture()
@@ -77,7 +90,7 @@ def user_factory(db):
         user = User(username=username, email=email, **kwargs)
         user.set_password(password)
         db.session.add(user)
-        db.session.flush()
+        db.session.commit()
         created.append(user)
         return user
 
@@ -96,7 +109,7 @@ def court_factory(db, user_factory):
             **kwargs,
         )
         db.session.add(court)
-        db.session.flush()
+        db.session.commit()
         return court
 
     return _make
@@ -116,13 +129,35 @@ def game_factory(db, court_factory, user_factory):
             max_players=max_players,
         )
         db.session.add(game)
-        db.session.flush()
+        db.session.commit()
         for player in players:
             db.session.add(GamePlayer(game_id=game.id, user_id=player.id))
-        db.session.flush()
+        db.session.commit()
         return game
 
     return _make
+
+
+@pytest.fixture()
+def csrf_client(app, db):
+    """A client with CSRF enforcement switched on.
+
+    TestingConfig disables CSRF so the rest of the suite can exercise
+    application logic without threading tokens through every request. These
+    tests are specifically about the tokens, so they turn it back on.
+    """
+    app.config["WTF_CSRF_ENABLED"] = True
+    try:
+        yield app.test_client()
+    finally:
+        app.config["WTF_CSRF_ENABLED"] = False
+
+
+def csrf_token_from(html):
+    """Pull the CSRF token out of a rendered page."""
+    match = re.search(r'name="csrf_token"[^>]*value="([^"]+)"', html)
+    assert match, "no csrf_token field found in the rendered page"
+    return match.group(1)
 
 
 @pytest.fixture()

@@ -14,6 +14,9 @@
     </ul>
   </nav>
 
-  <a href="{{ url_for('auth.logout') }}" class="btn btn-logout">Logout</a>
+  <form method="POST" action="{{ url_for('auth.logout') }}">
+    {{ logout_form.hidden_tag() }}
+    <button type="submit" class="btn btn-logout">Logout</button>
+  </form>
 </div>
 {% endblock %}

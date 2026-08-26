@@ -14,24 +14,28 @@
 {% endwith %}
 
 <form method="POST">
+    {{ form.hidden_tag() }}
     <div>
         <label for="court_id">Court:</label>
         <select id="court_id" name="court_id" required>
             <option value="">Select a court</option>
-            {% for court in courts %}
-                <option value="{{ court.id }}">{{ court.name }} - {{ court.address }}</option>
+            {% for value, label in form.court_id.choices %}
+                <option value="{{ value }}" {% if form.court_id.data == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
         </select>
+        {% for e in form.court_id.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
     </div>
 
     <div>
         <label for="time">Date and Time:</label>
         <input type="datetime-local" id="time" name="time" required>
+        {% for e in form.time.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
     </div>
 
     <div>
         <label for="max_players">Max Players:</label>
-        <input type="number" id="max_players" name="max_players" value="10" min="2" max="20" required>
+        <input type="number" id="max_players" name="max_players" value="{{ form.max_players.data or 10 }}" min="2" max="20" required>
+        {% for e in form.max_players.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
     </div>
 
     <button type="submit">Create Game</button>

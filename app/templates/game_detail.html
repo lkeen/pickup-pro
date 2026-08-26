@@ -82,6 +82,7 @@
 <div id="statsModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border:1px solid #ccc; z-index:1000;">
     <h3>Update Stats for <span id="statsPlayerName"></span></h3>
     <form method="POST" action="{{ url_for('stats.submit_stats', game_id=game.id) }}">
+        {{ stats_form.hidden_tag() }}
         <input type="hidden" id="statsUserId" name="user_id">
 
         <label>Points:</label>
@@ -102,6 +103,7 @@
 <div id="ratingModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border:1px solid #ccc; z-index:1000;">
     <h3>Rate <span id="ratingPlayerName"></span></h3>
     <form method="POST" action="{{ url_for('stats.submit_rating', game_id=game.id) }}">
+        {{ rating_form.hidden_tag() }}
         <input type="hidden" id="ratingUserId" name="to_user_id">
 
         <label>Rating (1-5):</label>

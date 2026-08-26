@@ -1,9 +1,10 @@
 """Court listing and creation."""
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, url_for
 from flask_login import current_user, login_required
 
 from app.extensions import db
+from app.forms import CourtForm
 from app.models import Court
 
 bp = Blueprint("courts", __name__, url_prefix="/courts")
@@ -19,28 +20,13 @@ def index():
 @bp.route("/create", methods=["GET", "POST"])
 @login_required
 def create():
-    if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        address = request.form.get("address", "").strip()
-        lat = request.form.get("lat")
-        lng = request.form.get("lng")
-
-        if not all([name, address, lat, lng]):
-            flash("All fields are required.")
-            return render_template("create_court.html")
-
-        try:
-            lat = float(lat)
-            lng = float(lng)
-        except ValueError:
-            flash("Invalid coordinates.")
-            return render_template("create_court.html")
-
+    form = CourtForm()
+    if form.validate_on_submit():
         court = Court(
-            name=name,
-            address=address,
-            lat=lat,
-            lng=lng,
+            name=form.name.data.strip(),
+            address=form.address.data.strip(),
+            lat=form.lat.data,
+            lng=form.lng.data,
             created_by=current_user.id,
         )
         db.session.add(court)
@@ -48,4 +34,4 @@ def create():
         flash("Court created successfully!")
         return redirect(url_for("courts.index"))
 
-    return render_template("create_court.html")
+    return render_template("create_court.html", form=form)

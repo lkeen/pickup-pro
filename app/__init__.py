@@ -10,7 +10,7 @@ from flask import Flask
 # at class-definition time.
 load_dotenv()
 
-from app.extensions import db, login_mgr, migrate  # noqa: E402
+from app.extensions import csrf, db, login_mgr, migrate  # noqa: E402
 from config import get_config  # noqa: E402
 
 
@@ -34,6 +34,9 @@ def register_extensions(app):
     db.init_app(app)
     migrate.init_app(app, db)
     login_mgr.init_app(app)
+    # Protects every POST/PUT/PATCH/DELETE app-wide, not only routes that
+    # happen to remember to validate a form.
+    csrf.init_app(app)
 
     # Imported for the side effect of registering the models with SQLAlchemy's
     # metadata, which is what Alembic autogenerate reads.

@@ -4,6 +4,7 @@
   {% if error %}<p style="color:red">{{ error }}</p>{% endif %}
   <h1>Welcome</h1>
   <form id="auth-form" method="post" action="{{ url_for('auth.login') }}">
+    {{ login_form.hidden_tag() }}
     <input type="text" name="username" placeholder="username" class="input-field" />
     <input type="password" name="password" placeholder="password" class="input-field" />
     <input type="submit" value="Login" class="btn btn-login" />
