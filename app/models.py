@@ -10,18 +10,47 @@ class User(UserMixin, db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key = True)
     username = db.Column(db.String(64), unique = True, nullable = False)
-    password_hash = db.Column(db.String(255), unique = False, nullable = False)
+    # Nullable: an account created through Google has no password at all.
+    password_hash = db.Column(db.String(255), unique = False, nullable = True)
     email = db.Column(db.String(254), unique = True, nullable = False)
+    # Only ever true for an address an identity provider vouched for. Passwords
+    # sign-ups are unverified until email confirmation exists.
+    email_verified = db.Column(
+        db.Boolean, nullable = False, default = False, server_default = db.text("false")
+    )
+    # The provider's stable subject identifier. Not the email: people change
+    # their email address, and the subject is what actually identifies them.
+    oauth_provider = db.Column(db.String(32))
+    oauth_sub = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default = datetime.now)
 
     courts = db.relationship('Court', backref='creator', lazy=True)
     hosted_games = db.relationship('Game', backref='host', lazy=True)
     games = db.relationship('Game', secondary='game_players', back_populates='players')
 
+    __table_args__ = (
+        db.UniqueConstraint('oauth_provider', 'oauth_sub', name='unique_oauth_identity'),
+        # Every account must have at least one way to authenticate. Without this
+        # a bug could leave a row that nobody -- including its owner -- can log
+        # into, and nothing would notice.
+        db.CheckConstraint(
+            'password_hash IS NOT NULL '
+            'OR (oauth_provider IS NOT NULL AND oauth_sub IS NOT NULL)',
+            name='user_has_a_credential',
+        ),
+    )
+
+    @property
+    def has_password(self):
+        return self.password_hash is not None
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
+        # An OAuth-only account has no hash; comparing against None raises.
+        if not self.password_hash:
+            return False
         return check_password_hash(self.password_hash, password)
 
 class Court(db.Model):

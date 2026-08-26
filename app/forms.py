@@ -16,7 +16,14 @@ from wtforms import (
     StringField,
     TextAreaField,
 )
-from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Regexp
+from wtforms.validators import (
+    DataRequired,
+    Email,
+    InputRequired,
+    Length,
+    NumberRange,
+    Regexp,
+)
 
 # Latitude/longitude bounds. Worth stating explicitly: the previous nearby-search
 # guard treated 0 as "missing", which silently rejected the equator and the
@@ -51,6 +58,10 @@ class RegisterForm(FlaskForm):
                 message="Username may contain letters, numbers, dot, dash and underscore only.",
             ),
         ],
+    )
+    email = StringField(
+        "Email",
+        validators=[DataRequired(), Email(), Length(max=254)],
     )
     password = PasswordField(
         "Password",

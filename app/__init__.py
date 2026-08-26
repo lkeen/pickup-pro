@@ -10,7 +10,7 @@ from flask import Flask
 # at class-definition time.
 load_dotenv()
 
-from app.extensions import csrf, db, limiter, login_mgr, migrate  # noqa: E402
+from app.extensions import csrf, db, limiter, login_mgr, migrate, oauth  # noqa: E402
 from config import get_config  # noqa: E402
 
 
@@ -38,6 +38,13 @@ def register_extensions(app):
     # happen to remember to validate a form.
     csrf.init_app(app)
     limiter.init_app(app)
+    oauth.init_app(app)
+
+    from app.blueprints.oauth import register_google
+
+    # Absent Google credentials is a normal state for a fresh clone: the
+    # sign-in button simply does not render.
+    app.config["GOOGLE_OAUTH_READY"] = register_google(app)
 
     # Imported for the side effect of registering the models with SQLAlchemy's
     # metadata, which is what Alembic autogenerate reads.

@@ -63,12 +63,61 @@ def test_usernames_with_html_are_rejected(client):
     assert "letters, numbers" in response.get_data(as_text=True)
 
 
-def test_valid_registration_succeeds(client):
+def test_valid_registration_succeeds(client, db):
+    from app.models import User
+
     response = client.post(
-        "/register", data={"username": "newplayer", "password": "long-enough-pw"}
+        "/register",
+        data={
+            "username": "newplayer",
+            "email": "newplayer@example.com",
+            "password": "long-enough-pw",
+        },
     )
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/dashboard")
+
+    user = db.session.query(User).filter_by(username="newplayer").one()
+    assert user.email == "newplayer@example.com"
+    # A self-asserted address is not a verified one.
+    assert user.email_verified is False
+
+
+def test_registration_requires_an_email(client, db):
+    """Registration used to invent {username}@example.com because the form had
+    no email field at all."""
+    from app.models import User
+
+    response = client.post(
+        "/register", data={"username": "noemail", "password": "long-enough-pw"}
+    )
+    assert response.status_code == 200
+    assert db.session.query(User).filter_by(username="noemail").count() == 0
+
+
+@pytest.mark.parametrize("bad_email", ["not-an-email", "@example.com", "a@", "a b@example.com"])
+def test_malformed_emails_are_rejected(client, db, bad_email):
+    from app.models import User
+
+    response = client.post(
+        "/register",
+        data={"username": "someone", "email": bad_email, "password": "long-enough-pw"},
+    )
+    assert response.status_code == 200
+    assert db.session.query(User).filter_by(username="someone").count() == 0
+
+
+def test_duplicate_email_is_rejected(client, db, user_factory):
+    from app.models import User
+
+    user_factory(username="first", email="shared@example.com")
+    response = client.post(
+        "/register",
+        data={"username": "second", "email": "shared@example.com", "password": "long-enough-pw"},
+    )
+    assert response.status_code == 200
+    assert "already registered" in response.get_data(as_text=True)
+    assert db.session.query(User).filter_by(username="second").count() == 0
 
 
 def test_max_players_out_of_range_is_rejected(login, user_factory, court_factory, db):

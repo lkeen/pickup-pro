@@ -53,11 +53,13 @@ def register():
         return _render_landing(register_form=form, error=_first_error(form))
 
     username = form.username.data.strip()
+    email = form.email.data.strip().lower()
     if User.query.filter_by(username=username).first():
         return _render_landing(register_form=form, error="User already registered.")
+    if User.query.filter_by(email=email).first():
+        return _render_landing(register_form=form, error="That email is already registered.")
 
-    # add email field to the form later; using placeholder for now
-    new_user = User(username=username, email=f"{username}@example.com")
+    new_user = User(username=username, email=email)
     new_user.set_password(form.password.data)
     db.session.add(new_user)
     db.session.commit()

@@ -3,19 +3,35 @@
 <div class="container">
   {% if error %}<p style="color:red">{{ error }}</p>{% endif %}
   <h1>Welcome</h1>
-  <form id="auth-form" method="post" action="{{ url_for('auth.login') }}">
+
+  <h2>Log in</h2>
+  <form method="post" action="{{ url_for('auth.login') }}">
     {{ login_form.hidden_tag() }}
-    <input type="text" name="username" placeholder="username" class="input-field" />
-    <input type="password" name="password" placeholder="password" class="input-field" />
+    <input type="text" name="username" placeholder="username" class="input-field" required />
+    <input type="password" name="password" placeholder="password" class="input-field" required />
     <input type="submit" value="Login" class="btn btn-login" />
-    <button type="button" class="btn btn-login" onclick="switchToRegister()">Register</button>
+  </form>
+
+  {% if config.GOOGLE_OAUTH_READY %}
+  <p>or</p>
+  <a href="{{ url_for('oauth.start') }}" class="btn btn-google">Continue with Google</a>
+  {% endif %}
+
+  <h2>Register</h2>
+  <form method="post" action="{{ url_for('auth.register') }}">
+    {{ register_form.hidden_tag() }}
+    <input type="text" name="username" placeholder="username"
+           value="{{ register_form.username.data or '' }}" class="input-field" required />
+    {% for e in register_form.username.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
+
+    <input type="email" name="email" placeholder="email"
+           value="{{ register_form.email.data or '' }}" class="input-field" required />
+    {% for e in register_form.email.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
+
+    <input type="password" name="password" placeholder="password" class="input-field" required />
+    {% for e in register_form.password.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
+
+    <input type="submit" value="Register" class="btn btn-register" />
   </form>
 </div>
-<script>
-function switchToRegister(){
-  const form = document.getElementById("auth-form");
-  form.action = "{{ url_for('auth.register') }}";
-  form.submit();
-}
-</script>
 {% endblock %}
