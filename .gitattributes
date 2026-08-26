@@ -1,0 +1,13 @@
+# Normalize all text files to LF in the repository. Git checks them out with the
+# platform's native endings, so this is invisible on Windows while keeping the
+# stored history free of the CRLF/LF churn that otherwise shows a whole-file
+# rewrite whenever a file is touched from a different OS.
+* text=auto eol=lf
+
+# Binary files: never touch these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
