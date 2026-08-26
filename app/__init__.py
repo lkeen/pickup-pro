@@ -9,13 +9,19 @@ from app.extensions import db, migrate, login_mgr
 # Load environment variables first
 load_dotenv()
 
-from config import DevelopmentConfig
+from config import get_config
 from app.models import User, Court, Game, GamePlayer, PlayerStats, PlayerRating
 from app.utils import haversine_distance
 
-def create_app():
+def create_app(config_name=None):
     app = Flask(__name__)
-    app.config.from_object(DevelopmentConfig)
+
+    # Resolve and validate configuration before anything else touches it, so a
+    # missing DATABASE_URL or a placeholder SECRET_KEY fails at boot rather than
+    # on the first request that happens to need it.
+    config_class = get_config(config_name)
+    config_class.validate()
+    app.config.from_object(config_class)
 
     # Init extensions
     db.init_app(app)
