@@ -3,7 +3,7 @@
 {% block body %}
 <h1>{{ user.username }}'s Profile</h1>
 
-<a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+<a href="{{ url_for('auth.dashboard') }}">Back to Dashboard</a>
 
 <h2>Lifetime Statistics</h2>
 {% if stats.games_played %}

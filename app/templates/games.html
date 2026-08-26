@@ -13,9 +13,9 @@
     {% endif %}
 {% endwith %}
 
-<a href="{{ url_for('create_game') }}">Create New Game</a>
-<a href="{{ url_for('courts') }}">View Courts</a>
-<a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+<a href="{{ url_for('games.create') }}">Create New Game</a>
+<a href="{{ url_for('courts.index') }}">View Courts</a>
+<a href="{{ url_for('auth.dashboard') }}">Back to Dashboard</a>
 
 <h2>Filter Games</h2>
 <form method="GET">
@@ -31,7 +31,7 @@
     <input type="date" name="date" value="{{ request.args.get('date', '') }}">
 
     <button type="submit">Filter</button>
-    <a href="{{ url_for('games') }}">Clear Filters</a>
+    <a href="{{ url_for('games.index') }}">Clear Filters</a>
 </form>
 
 <h2>Available Games</h2>
@@ -54,13 +54,13 @@
                 <td>{{ game.host.username }}</td>
                 <td>{{ game.current_players }}/{{ game.max_players }}</td>
                 <td>
-                    <a href="{{ url_for('game_detail', game_id=game.id) }}">View Details</a>
+                    <a href="{{ url_for('games.detail', game_id=game.id) }}">View Details</a>
                     {% if current_user in game.players %}
-                        <form method="POST" action="{{ url_for('leave_game', game_id=game.id) }}" style="display: inline;">
+                        <form method="POST" action="{{ url_for('games.leave', game_id=game.id) }}" style="display: inline;">
                             <button type="submit">Leave Game</button>
                         </form>
                     {% elif game.can_join(current_user) %}
-                        <form method="POST" action="{{ url_for('join_game', game_id=game.id) }}" style="display: inline;">
+                        <form method="POST" action="{{ url_for('games.join', game_id=game.id) }}" style="display: inline;">
                             <button type="submit">Join Game</button>
                         </form>
                     {% else %}
@@ -72,6 +72,6 @@
         </tbody>
     </table>
 {% else %}
-    <p>No games available. <a href="{{ url_for('create_game') }}">Create the first one!</a></p>
+    <p>No games available. <a href="{{ url_for('games.create') }}">Create the first one!</a></p>
 {% endif %}
 {% endblock %}

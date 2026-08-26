@@ -13,8 +13,8 @@
     {% endif %}
 {% endwith %}
 
-<a href="{{ url_for('create_court') }}">Create New Court</a>
-<a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+<a href="{{ url_for('courts.create') }}">Create New Court</a>
+<a href="{{ url_for('auth.dashboard') }}">Back to Dashboard</a>
 
 <h2>Available Courts</h2>
 {% if courts %}
@@ -34,13 +34,13 @@
                 <td>{{ court.address }}</td>
                 <td>{{ court.creator.username }}</td>
                 <td>
-                    <a href="{{ url_for('games', court_id=court.id) }}">View Games</a>
+                    <a href="{{ url_for('games.index', court_id=court.id) }}">View Games</a>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 {% else %}
-    <p>No courts available. <a href="{{ url_for('create_court') }}">Create the first one!</a></p>
+    <p>No courts available. <a href="{{ url_for('courts.create') }}">Create the first one!</a></p>
 {% endif %}
 {% endblock %}
