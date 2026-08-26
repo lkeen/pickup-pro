@@ -84,6 +84,13 @@ class Court(db.Model):
 
     games = db.relationship('Game', backref='court', lazy=True)
 
+    __table_args__ = (
+        # Declared here so `flask db check` can see it, but created in a
+        # migration rather than by metadata: it is built CONCURRENTLY, which
+        # cannot happen inside a transaction.
+        db.Index('ix_courts_geog', 'geog', postgresql_using='gist'),
+    )
+
 class Game(db.Model):
     __tablename__ = "games"
     id = db.Column(db.Integer, primary_key = True)

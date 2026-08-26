@@ -2,13 +2,12 @@
 
 from datetime import datetime, timedelta
 
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.extensions import db
 from app.forms import ConfirmForm, GameForm, RatingForm, StatsForm
 from app.models import Court, Game, GamePlayer, PlayerRating, PlayerStats
-from app.utils import haversine_distance
 
 bp = Blueprint("games", __name__, url_prefix="/games")
 
@@ -38,65 +37,6 @@ def index():
     return render_template(
         "games.html", games=games, courts=courts, confirm_form=ConfirmForm()
     )
-
-
-@bp.route("/nearby")
-@login_required
-def nearby():
-    lat = request.args.get("lat", type=float)
-    lng = request.args.get("lng", type=float)
-    radius = request.args.get("radius", default=10, type=float)  # default 10km
-    date = request.args.get("date")
-
-    if not lat or not lng:
-        return jsonify({"error": "Latitude and longitude are required"}), 400
-
-    # Get all upcoming games with their court info
-    query = db.session.query(Game, Court).join(Court, Game.court_id == Court.id)
-
-    # Filter by date if provided
-    if date:
-        try:
-            date_obj = datetime.strptime(date, "%Y-%m-%d").date()
-            query = query.filter(Game.time >= date_obj)
-            query = query.filter(
-                Game.time
-                < datetime.combine(date_obj, datetime.min.time()) + timedelta(days=1)
-            )
-        except ValueError:
-            pass
-    else:
-        # Default: only show future games
-        query = query.filter(Game.time >= datetime.now())
-
-    games_with_courts = query.order_by(Game.time).all()
-
-    # Calculate distance for each game and filter by radius
-    nearby_games = []
-    for game, court in games_with_courts:
-        distance = haversine_distance(lat, lng, court.lat, court.lng)
-        if distance <= radius:
-            nearby_games.append(
-                {
-                    "id": game.id,
-                    "court_id": court.id,
-                    "court_name": court.name,
-                    "court_address": court.address,
-                    "court_lat": court.lat,
-                    "court_lng": court.lng,
-                    "time": game.time.isoformat(),
-                    "max_players": game.max_players,
-                    "current_players": game.current_players,
-                    "spots_available": game.spots_available,
-                    "distance_km": round(distance, 2),
-                    "host_id": game.host_id,
-                }
-            )
-
-    # Sort by distance
-    nearby_games.sort(key=lambda x: x["distance_km"])
-
-    return jsonify({"games": nearby_games, "count": len(nearby_games)})
 
 
 @bp.route("/create", methods=["GET", "POST"])
