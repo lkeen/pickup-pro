@@ -19,6 +19,8 @@ from app import create_app
 from app.extensions import db as _db
 from app.models import Court, Game, GamePlayer, User
 
+DEFAULT_PASSWORD = "correct-horse-battery"
+
 
 @pytest.fixture(scope="session")
 def app():
@@ -31,6 +33,11 @@ def app():
     # fixtures below drop every table.
     if not uri.rsplit("/", 1)[-1].endswith("_test"):
         pytest.fail(f"Refusing to run tests against a database not named *_test: {uri!r}")
+
+    # Storage is configured, but the limiter is off unless a test asks for it.
+    from app.extensions import limiter
+
+    limiter.enabled = False
 
     with application.app_context():
         _db.drop_all()
@@ -84,13 +91,16 @@ def user_factory(db):
     """Create persisted users with predictable credentials."""
     created = []
 
-    def _make(username=None, password="correct-horse-battery", **kwargs):
+    def _make(username=None, password=DEFAULT_PASSWORD, **kwargs):
         username = username or f"player{len(created) + 1}"
         email = kwargs.pop("email", f"{username}@example.test")
         user = User(username=username, email=email, **kwargs)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
+        # Not a column: the login fixture needs the plaintext to authenticate
+        # through the real endpoint.
+        user._test_password = password
         created.append(user)
         return user
 
@@ -162,12 +172,24 @@ def csrf_token_from(html):
 
 @pytest.fixture()
 def login(client):
-    """Authenticate the test client as the given user."""
+    """Authenticate the test client by actually logging in.
+
+    Writing _user_id into the session directly is tempting and does not work:
+    Flask-Login runs with session_protection="strong", which drops any session
+    whose client-identifier hash it did not set itself. Going through the real
+    endpoint also means these tests exercise the login path rather than a
+    fixture's impression of it.
+    """
 
     def _login(user):
-        with client.session_transaction() as session:
-            session["_user_id"] = str(user.id)
-            session["_fresh"] = True
+        response = client.post(
+            "/login",
+            data={
+                "username": user.username,
+                "password": getattr(user, "_test_password", DEFAULT_PASSWORD),
+            },
+        )
+        assert response.status_code == 302, "login fixture failed to authenticate"
         return client
 
     return _login

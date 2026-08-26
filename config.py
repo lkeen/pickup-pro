@@ -6,6 +6,7 @@ being read from ``os.getenv`` at the point of use.
 """
 
 import os
+from datetime import timedelta
 
 # Secrets that ship in example files and tutorials. If one of these ever reaches
 # production it means the real key was never set, so treat it as unset.
@@ -33,6 +34,35 @@ class BaseConfig:
     # container restart surfaces as a 500 on the next request.
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
 
+    # --- Session cookie ---
+    # A distinctive name keeps this app's cookie from colliding with another
+    # Flask app on the same host during local development.
+    SESSION_COOKIE_NAME = "pickup_session"
+    # Not readable from JavaScript, so an XSS bug cannot lift the session.
+    SESSION_COOKIE_HTTPONLY = True
+    # Not sent on cross-site POSTs. Defence in depth behind the CSRF tokens:
+    # Flask's default is None, which browsers treat as Lax anyway, but relying
+    # on a browser default is not a decision.
+    SESSION_COOKIE_SAMESITE = "Lax"
+    # Overridden to True in production. Left False here so the cookie works over
+    # plain HTTP on localhost.
+    SESSION_COOKIE_SECURE = False
+    # Flask's default is 31 days. A stolen cookie stays valid for that whole
+    # window, which is far longer than this app needs.
+    PERMANENT_SESSION_LIFETIME = timedelta(days=7)
+
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SECURE = False
+    REMEMBER_COOKIE_DURATION = timedelta(days=14)
+
+    # --- Rate limiting ---
+    # Redis-backed in a later branch; in-memory is per-process and therefore
+    # wrong behind multiple workers, which is why this is explicit rather than
+    # left to default.
+    RATELIMIT_STORAGE_URI = "memory://"
+    RATELIMIT_HEADERS_ENABLED = True
+
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
@@ -55,6 +85,10 @@ class TestingConfig(BaseConfig):
     # Off by default so tests exercise application logic rather than token
     # plumbing. The CSRF regression tests turn it back on explicitly.
     WTF_CSRF_ENABLED = False
+    # Left enabled so Flask-Limiter still builds its storage backend; the test
+    # fixtures then switch the limiter off at runtime, because rate limits would
+    # otherwise make the rest of the suite order-dependent and flaky.
+    RATELIMIT_ENABLED = True
     # Tests run against a real PostgreSQL database, not SQLite: the spatial
     # queries this project is built around have no SQLite equivalent.
     SQLALCHEMY_DATABASE_URI = os.getenv("TEST_DATABASE_URL") or (
@@ -64,6 +98,11 @@ class TestingConfig(BaseConfig):
 
 class ProductionConfig(BaseConfig):
     DEBUG = False
+    # HTTPS-only cookies. Without this the session cookie is sent over plain
+    # HTTP and can be read off the wire.
+    SESSION_COOKIE_SECURE = True
+    REMEMBER_COOKIE_SECURE = True
+    PREFERRED_URL_SCHEME = "https"
 
     @classmethod
     def validate(cls):

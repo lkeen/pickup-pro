@@ -10,7 +10,7 @@ from flask import Flask
 # at class-definition time.
 load_dotenv()
 
-from app.extensions import csrf, db, login_mgr, migrate  # noqa: E402
+from app.extensions import csrf, db, limiter, login_mgr, migrate  # noqa: E402
 from config import get_config  # noqa: E402
 
 
@@ -37,6 +37,7 @@ def register_extensions(app):
     # Protects every POST/PUT/PATCH/DELETE app-wide, not only routes that
     # happen to remember to validate a form.
     csrf.init_app(app)
+    limiter.init_app(app)
 
     # Imported for the side effect of registering the models with SQLAlchemy's
     # metadata, which is what Alembic autogenerate reads.
@@ -49,6 +50,9 @@ def register_extensions(app):
 
     # Where @login_required sends anonymous users.
     login_mgr.login_view = "auth.home"
+    # "strong" ties the session to a hash of the client's IP and user agent
+    # and drops it when they change, so a lifted cookie is less portable.
+    login_mgr.session_protection = "strong"
 
 
 def register_blueprints(app):

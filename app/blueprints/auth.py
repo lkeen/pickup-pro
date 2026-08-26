@@ -1,9 +1,9 @@
 """Authentication and the logged-in landing page."""
 
-from flask import Blueprint, redirect, render_template, url_for
+from flask import Blueprint, redirect, render_template, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.forms import ConfirmForm, LoginForm, RegisterForm
 from app.models import User
 
@@ -26,7 +26,10 @@ def home():
     return _render_landing()
 
 
+# Both limits apply: a burst limit stops rapid guessing, and an hourly limit
+# stops a slow grind. Counted per client address.
 @bp.route("/login", methods=["POST"])
+@limiter.limit("10 per minute; 60 per hour", methods=["POST"])
 def login():
     form = LoginForm()
     if not form.validate_on_submit():
@@ -34,7 +37,7 @@ def login():
 
     user = User.query.filter_by(username=form.username.data.strip()).first()
     if user and user.check_password(form.password.data):
-        login_user(user)
+        _start_authenticated_session(user)
         return redirect(url_for("auth.dashboard"))
 
     # Deliberately identical whether the username exists or the password is
@@ -43,6 +46,7 @@ def login():
 
 
 @bp.route("/register", methods=["POST"])
+@limiter.limit("5 per minute; 20 per hour", methods=["POST"])
 def register():
     form = RegisterForm()
     if not form.validate_on_submit():
@@ -57,7 +61,7 @@ def register():
     new_user.set_password(form.password.data)
     db.session.add(new_user)
     db.session.commit()
-    login_user(new_user)
+    _start_authenticated_session(new_user)
     return redirect(url_for("auth.dashboard"))
 
 
@@ -78,6 +82,17 @@ def logout():
         return redirect(url_for("auth.dashboard"))
     logout_user()
     return redirect(url_for("auth.home"))
+
+
+def _start_authenticated_session(user):
+    """Log the user in on a fresh session.
+
+    Clearing first means the session identifier the user carried while
+    anonymous is not the one that ends up authenticated, so an attacker who
+    fixed a victim's session cookie beforehand does not inherit the login.
+    """
+    session.clear()
+    login_user(user)
 
 
 def _first_error(form):
