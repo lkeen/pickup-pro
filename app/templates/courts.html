@@ -1,6 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Courts — Pickup Pro{% endblock %}
 
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map.js') }}" defer></script>
+{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet.css') }}">
+{% endblock %}
+
 {% block body %}
 <div class="page-header">
   <h1>Courts</h1>
@@ -9,8 +18,34 @@
   </div>
 </div>
 
+<div class="card">
+  <div class="form-row" style="margin-bottom:0.75rem">
+    <div class="form-row__action">
+      <button type="button" id="nearby-search" class="btn btn--primary">Find games near me</button>
+    </div>
+    <div>
+      <label for="nearby-radius">Radius — <span id="nearby-radius-label">10 km</span></label>
+      <input type="range" id="nearby-radius" min="1" max="100" step="1" value="10">
+    </div>
+  </div>
+
+  <div id="court-map" class="map-canvas"></div>
+
+  <p id="map-status" class="small muted" style="margin:0.75rem 0 0"></p>
+  <div class="map-legend muted" style="margin-top:0.5rem">
+    <span><i class="map-pin--court" style="background:var(--color-text-muted)"></i> Court</span>
+    <span><i class="map-pin--game" style="background:var(--color-accent)"></i> Has a game</span>
+    <span><i class="map-pin--you" style="background:var(--color-success)"></i> You</span>
+  </div>
+  <p class="small muted" style="margin-top:0.5rem">
+    Click anywhere on the map to search from that point instead.
+  </p>
+
+  <div id="nearby-results" style="margin-top:1rem"></div>
+</div>
+
 {% if courts %}
-<div class="card card--flush">
+<div class="card card--flush" style="margin-top:1rem">
   <div class="table-wrap">
     <table>
       <thead><tr><th>Name</th><th>Address</th><th></th></tr></thead>

@@ -5,7 +5,12 @@ from flask_login import login_required
 
 from app.extensions import db
 from app.models import User
-from app.services.aggregates import profile_summary, recent_games, recent_ratings
+from app.services.aggregates import (
+    chart_data,
+    profile_summary,
+    recent_games,
+    recent_ratings,
+)
 
 bp = Blueprint("profiles", __name__, url_prefix="/users")
 
@@ -20,4 +25,5 @@ def detail(user_id):
         summary=profile_summary(user_id),
         recent_games=recent_games(user_id),
         recent_ratings=recent_ratings(user_id),
+        chart_data=chart_data(user_id),
     )

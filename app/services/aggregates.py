@@ -222,3 +222,28 @@ def rating_leaderboard(limit=10):
         ttl=LEADERBOARD_TTL_SECONDS,
         tags=(LEADERBOARD_TAG,),
     )
+
+
+def chart_data(user_id, limit=15):
+    """Series for the profile charts.
+
+    Built from the same rows the tables render, in chronological order -- the
+    tables show newest first, but a trend line reads left to right.
+    """
+    games = [
+        {
+            "date": game.time.strftime("%d %b"),
+            "points": stat.points or 0,
+            "rebounds": stat.rebounds or 0,
+            "assists": stat.assists or 0,
+        }
+        for game, stat in reversed(recent_games(user_id, limit=limit))
+    ]
+
+    counts = dict(
+        db.session.query(PlayerRating.rating, db.func.count(PlayerRating.id))
+        .filter(PlayerRating.to_user_id == user_id)
+        .group_by(PlayerRating.rating)
+        .all()
+    )
+    return {"games": games, "ratings": [counts.get(score, 0) for score in range(1, 6)]}

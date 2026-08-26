@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models import Game
 from app.services import caching
+from app.services.aggregates import all_courts_brief
 from app.services.geo import (
     NEARBY_TTL_SECONDS,
     InvalidSearch,
@@ -58,3 +59,15 @@ def games_nearby():
         tags=nearby_cache_tags(lat, lng, radius_km),
     )
     return jsonify(payload)
+
+
+@bp.route("/courts")
+@login_required
+def courts():
+    """Every court, for plotting on the map.
+
+    Served from the same cached list the courts page uses, so opening the map
+    costs no extra query.
+    """
+    rows = all_courts_brief()
+    return jsonify({"courts": rows, "count": len(rows)})

@@ -32,6 +32,21 @@
   {% endif %}
 </div>
 
+{% if chart_data.games | length >= 2 %}
+<div class="grid grid--2" style="margin-top:1rem">
+  <div class="card">
+    <h3>Stat trend</h3>
+    <div class="chart-box"><canvas id="stat-trend"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>Ratings received</h3>
+    <div class="chart-box"><canvas id="rating-distribution"></canvas></div>
+  </div>
+</div>
+{% endif %}
+
+<script type="application/json" id="profile-chart-data">{{ chart_data | tojson }}</script>
+
 <div class="grid grid--2" style="margin-top:1rem">
   <div class="card card--flush">
     <div style="padding:1rem 1.25rem 0"><h3>Recent games</h3></div>
@@ -76,4 +91,11 @@
     {% else %}<div class="empty"><p>No ratings received yet.</p></div>{% endif %}
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if chart_data.games | length >= 2 %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.js') }}"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}" defer></script>
+{% endif %}
 {% endblock %}
