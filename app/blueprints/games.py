@@ -2,8 +2,9 @@
 
 from datetime import datetime, timedelta
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
@@ -73,19 +74,35 @@ def create():
 @bp.route("/<int:game_id>/join", methods=["POST"])
 @login_required
 def join(game_id):
-    game = Game.query.get_or_404(game_id)
-
     if not ConfirmForm().validate_on_submit():
         flash("Could not verify that request. Please try again.")
         return redirect(url_for("games.index"))
 
+    # Lock the game row for the rest of the transaction. Two requests racing to
+    # take the last slot now queue here instead of both reading "one slot left"
+    # and both inserting.
+    game = db.session.execute(
+        db.select(Game).where(Game.id == game_id).with_for_update()
+    ).scalar_one_or_none()
+    if game is None:
+        abort(404)
+
     if not game.can_join(current_user):
+        db.session.rollback()
         flash("Cannot join this game (full or already joined).")
         return redirect(url_for("games.index"))
 
-    game_player = GamePlayer(game_id=game_id, user_id=current_user.id)
-    db.session.add(game_player)
-    db.session.commit()
+    db.session.add(GamePlayer(game_id=game_id, user_id=current_user.id))
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # The database enforces capacity too, via a trigger. Reaching this means
+        # the lock above was bypassed by some other write path -- the constraint
+        # is the backstop, not the primary mechanism.
+        db.session.rollback()
+        flash("Cannot join this game (full or already joined).")
+        return redirect(url_for("games.index"))
+
     flash("Successfully joined the game!")
     return redirect(url_for("games.index"))
 
@@ -93,7 +110,7 @@ def join(game_id):
 @bp.route("/<int:game_id>/leave", methods=["POST"])
 @login_required
 def leave(game_id):
-    Game.query.get_or_404(game_id)  # 404s on a missing game
+    db.get_or_404(Game, game_id)  # 404s on a missing game
 
     if not ConfirmForm().validate_on_submit():
         flash("Could not verify that request. Please try again.")
@@ -116,7 +133,7 @@ def leave(game_id):
 @bp.route("/<int:game_id>")
 @login_required
 def detail(game_id):
-    game = Game.query.get_or_404(game_id)
+    game = db.get_or_404(Game, game_id)
     is_rostered = current_user in game.players
 
     # Get current stats for this game

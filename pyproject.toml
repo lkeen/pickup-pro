@@ -28,10 +28,8 @@ addopts = "-ra --strict-markers"
 filterwarnings = [
     # Our own deprecations are bugs; fail on them.
     "error::DeprecationWarning:app.*",
-    # Model.query.get() is legacy in SQLAlchemy 2.0. It is replaced with
-    # db.session.get() in the roster-capacity branch; until then this stays a
-    # warning rather than an error so the debt is visible but not blocking.
-    "default::sqlalchemy.exc.LegacyAPIWarning",
+    # Legacy SQLAlchemy 1.x APIs are gone from this codebase; keep them gone.
+    "error::sqlalchemy.exc.LegacyAPIWarning",
 ]
 markers = [
     "slow: tests that take more than a second",

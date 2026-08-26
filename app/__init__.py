@@ -53,7 +53,7 @@ def register_extensions(app):
     @login_mgr.user_loader
     def load_user(user_id: str):
         # Flask-Login passes a string; convert to int for PK lookup
-        return User.query.get(int(user_id))
+        return db.session.get(User, int(user_id))
 
     # Where @login_required sends anonymous users.
     login_mgr.login_view = "auth.home"

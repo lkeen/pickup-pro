@@ -89,6 +89,18 @@ class Court(db.Model):
         # cannot happen inside a transaction.
         db.Index('ix_courts_geog', 'geog', postgresql_using='gist'),
         db.Index('ix_courts_created_by', 'created_by'),
+        # Stops the same court being entered twice, which would split its games
+        # across two rows nobody sees together. Rounded to ~11 m because two
+        # people typing coordinates for one court will not agree to the last
+        # float digit. Created in a migration; declared here so autogenerate
+        # does not propose dropping it.
+        db.Index(
+            'uq_courts_name_location',
+            db.text('lower(name)'),
+            db.text('round(lat::numeric, 4)'),
+            db.text('round(lng::numeric, 4)'),
+            unique = True,
+        ),
     )
 
 class Game(db.Model):

@@ -12,7 +12,7 @@ bp = Blueprint("profiles", __name__, url_prefix="/users")
 @bp.route("/<int:user_id>")
 @login_required
 def detail(user_id):
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
 
     # Calculate lifetime stats aggregations
     stats_query = db.session.query(
