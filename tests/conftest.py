@@ -127,7 +127,9 @@ def court_factory(db, user_factory):
 
 @pytest.fixture()
 def game_factory(db, court_factory, user_factory):
-    from datetime import datetime, timedelta
+    from datetime import timedelta
+
+    from app.timeutils import utcnow
 
     def _make(court=None, host=None, when=None, max_players=10, players=()):
         host = host or user_factory()
@@ -135,7 +137,7 @@ def game_factory(db, court_factory, user_factory):
         game = Game(
             court_id=court.id,
             host_id=host.id,
-            time=when or datetime.now() + timedelta(days=1),
+            time=when or utcnow() + timedelta(days=1),
             max_players=max_players,
         )
         db.session.add(game)

@@ -11,16 +11,16 @@ select = [
     "B",    # bugbear
     "UP",   # pyupgrade
     "W",    # pycodestyle warnings
+    "DTZ",  # naive datetime usage
 ]
-# DTZ (naive datetime) is deliberately not enabled yet: every timestamp column in
-# this project is currently naive, and turning the rule on before the
-# timestamptz migration would mean 6 blanket noqa comments. It is enabled in the
-# branch that fixes them.
 
 [tool.ruff.lint.per-file-ignores]
 # The factory must call load_dotenv() before importing config, which reads
 # os.getenv at class-definition time.
 "app/__init__.py" = ["E402"]
+# These tests construct naive datetimes on purpose: a naive wall-clock time is
+# exactly the input to_utc() exists to convert, so it is the thing under test.
+"tests/test_time_handling.py" = ["DTZ001"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

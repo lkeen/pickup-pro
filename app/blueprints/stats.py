@@ -5,8 +5,6 @@ games blueprint: they are the write path for player-reported data and have
 different authorization requirements from ordinary roster management.
 """
 
-from datetime import datetime
-
 from flask import Blueprint, flash, g, redirect, url_for
 from flask_login import current_user, login_required
 
@@ -14,6 +12,7 @@ from app.extensions import db
 from app.forms import RatingForm, StatsForm
 from app.models import PlayerRating, PlayerStats
 from app.security import forbid_self, require_roster, require_target_on_roster
+from app.timeutils import utcnow
 
 bp = Blueprint("stats", __name__, url_prefix="/games")
 
@@ -38,7 +37,7 @@ def submit_stats(game_id):
         existing.points = form.points.data
         existing.rebounds = form.rebounds.data
         existing.assists = form.assists.data
-        existing.updated_at = datetime.now()
+        existing.updated_at = utcnow()
     else:
         db.session.add(
             PlayerStats(

@@ -63,6 +63,12 @@ class BaseConfig:
     RATELIMIT_STORAGE_URI = "memory://"
     RATELIMIT_HEADERS_ENABLED = True
 
+    # Wall-clock times (a game's start) are interpreted and displayed in this
+    # zone. Everything is stored in UTC. Per-court timezones would be the fully
+    # correct model; one configured zone is the honest simplification for an app
+    # serving a single metro area.
+    APP_TIMEZONE = os.getenv("APP_TIMEZONE", "UTC")
+
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")

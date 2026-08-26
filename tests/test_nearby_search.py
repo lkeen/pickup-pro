@@ -6,12 +6,13 @@ filtered with a Haversine loop. On 25,000 courts / 75,000 games that took
 ix_courts_geog answers the same question in ~9 ms and returns 13.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import text
 
 from app.services.geo import InvalidSearch, validate_search
+from app.timeutils import utcnow
 from app.utils import haversine_distance
 
 ATHENS = (33.9519, -83.3576)
@@ -138,7 +139,7 @@ class TestEndpoint:
     ):
         host = user_factory()
         court = court_factory(lat=ATHENS[0], lng=ATHENS[1], created_by=host.id)
-        game_factory(court=court, host=host, when=datetime.now() - timedelta(days=1))
+        game_factory(court=court, host=host, when=utcnow() - timedelta(days=1))
 
         client = login(host)
         assert client.get(_url(*ATHENS, radius=5)).get_json()["count"] == 0
@@ -148,7 +149,7 @@ class TestEndpoint:
     ):
         host = user_factory()
         court = court_factory(lat=ATHENS[0], lng=ATHENS[1], created_by=host.id)
-        target = datetime.now() + timedelta(days=3)
+        target = utcnow() + timedelta(days=3)
         game_factory(court=court, host=host, when=target)
         game_factory(court=court, host=host, when=target + timedelta(days=1))
 

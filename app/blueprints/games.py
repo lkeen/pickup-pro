@@ -9,6 +9,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.forms import ConfirmForm, GameForm, RatingForm, StatsForm
 from app.models import Court, Game, GamePlayer, PlayerRating, PlayerStats
+from app.timeutils import to_utc
 
 bp = Blueprint("games", __name__, url_prefix="/games")
 
@@ -35,12 +36,11 @@ def index():
         query = query.filter_by(court_id=court_id)
     if date:
         try:
-            date_obj = datetime.strptime(date, "%Y-%m-%d").date()
-            query = query.filter(Game.time >= date_obj)
-            query = query.filter(
-                Game.time
-                < datetime.combine(date_obj, datetime.min.time()) + timedelta(days=1)
-            )
+            # Deliberately naive: a calendar date has no timezone until it is
+            # anchored to one, which to_utc does on the next line.
+            date_obj = datetime.strptime(date, "%Y-%m-%d").date()  # noqa: DTZ007
+            start = to_utc(datetime.combine(date_obj, datetime.min.time()))
+            query = query.filter(Game.time >= start, Game.time < start + timedelta(days=1))
         except ValueError:
             pass
 
@@ -59,7 +59,7 @@ def create():
         game = Game(
             court_id=form.court_id.data,
             host_id=current_user.id,
-            time=form.time.data,
+            time=to_utc(form.time.data),
             max_players=form.max_players.data,
         )
         db.session.add(game)

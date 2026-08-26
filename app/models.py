@@ -1,10 +1,9 @@
-from datetime import datetime
-
 from flask_login import UserMixin
 from geoalchemy2 import Geography
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
+from app.timeutils import utcnow
 
 
 class User(UserMixin, db.Model):
@@ -23,7 +22,7 @@ class User(UserMixin, db.Model):
     # their email address, and the subject is what actually identifies them.
     oauth_provider = db.Column(db.String(32))
     oauth_sub = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default = datetime.now)
+    created_at = db.Column(db.DateTime(timezone = True), default = utcnow)
 
     courts = db.relationship('Court', backref='creator', lazy=True)
     hosted_games = db.relationship('Game', backref='host', lazy=True)
@@ -80,7 +79,7 @@ class Court(db.Model):
         nullable = False,
     )
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable = False)
-    created_at = db.Column(db.DateTime, default = datetime.now)
+    created_at = db.Column(db.DateTime(timezone = True), default = utcnow)
 
     games = db.relationship('Game', backref='court', lazy=True)
 
@@ -97,9 +96,11 @@ class Game(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     court_id = db.Column(db.Integer, db.ForeignKey("courts.id"), nullable = False)
     host_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable = False)
-    time = db.Column(db.DateTime, nullable = False)
+    # Stored as an instant in UTC. The wall-clock time a host typed is
+    # interpreted in APP_TIMEZONE on the way in and rendered back in it.
+    time = db.Column(db.DateTime(timezone = True), nullable = False)
     max_players = db.Column(db.Integer, default = 10)
-    created_at = db.Column(db.DateTime, default = datetime.now)
+    created_at = db.Column(db.DateTime(timezone = True), default = utcnow)
 
     players = db.relationship('User', secondary='game_players', back_populates='games')
 
@@ -130,7 +131,7 @@ class GamePlayer(db.Model):
     __tablename__ = "game_players"
     game_id = db.Column(db.Integer, db.ForeignKey("games.id"), primary_key = True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key = True)
-    joined_at = db.Column(db.DateTime, default = datetime.now)
+    joined_at = db.Column(db.DateTime(timezone = True), default = utcnow)
 
     __table_args__ = (
         # game_id already leads the composite primary key; user_id does not, so
@@ -146,8 +147,8 @@ class PlayerStats(db.Model):
     points = db.Column(db.Integer, default = 0)
     rebounds = db.Column(db.Integer, default = 0)
     assists = db.Column(db.Integer, default = 0)
-    created_at = db.Column(db.DateTime, default = datetime.now)
-    updated_at = db.Column(db.DateTime, default = datetime.now, onupdate = datetime.now)
+    created_at = db.Column(db.DateTime(timezone = True), default = utcnow)
+    updated_at = db.Column(db.DateTime(timezone = True), default = utcnow, onupdate = utcnow)
 
     game = db.relationship('Game', backref='player_stats')
     user = db.relationship('User', backref='player_stats')
@@ -167,7 +168,7 @@ class PlayerRating(db.Model):
     game_id = db.Column(db.Integer, db.ForeignKey("games.id"), nullable = False)
     rating = db.Column(db.Integer, nullable = False)
     comment = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default = datetime.now)
+    created_at = db.Column(db.DateTime(timezone = True), default = utcnow)
 
     game = db.relationship('Game', backref='player_ratings')
     from_user = db.relationship('User', foreign_keys=[from_user_id], backref='ratings_given')

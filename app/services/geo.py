@@ -13,12 +13,14 @@ box is ever measured.
 """
 
 from datetime import datetime, timedelta
+from datetime import time as time_of_day
 
 from geoalchemy2 import Geography
 from sqlalchemy import func
 
 from app.extensions import db
 from app.models import Court, Game
+from app.timeutils import to_utc, utcnow
 
 # Bounds for user-supplied search parameters.
 MIN_LAT, MAX_LAT = -90.0, 90.0
@@ -61,7 +63,9 @@ def validate_search(lat, lng, radius_km, date_str=None):
     date = None
     if date_str:
         try:
-            date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            # Naive on purpose: this is a calendar date, not an instant. It
+            # becomes one in nearby_games(), anchored to APP_TIMEZONE.
+            date = datetime.strptime(date_str, "%Y-%m-%d").date()  # noqa: DTZ007
         except ValueError:
             raise InvalidSearch("Date must be in YYYY-MM-DD format.") from None
 
@@ -97,10 +101,12 @@ def nearby_games(lat, lng, radius_km, date=None, now=None):
     )
 
     if date is not None:
-        start = datetime.combine(date, datetime.min.time())
+        # A calendar day is a local-time concept: "games on Saturday" means
+        # midnight to midnight where the court is, not in UTC.
+        start = to_utc(datetime.combine(date, time_of_day.min))
         query = query.filter(Game.time >= start, Game.time < start + timedelta(days=1))
     else:
-        query = query.filter(Game.time >= (now or datetime.now()))
+        query = query.filter(Game.time >= (now or utcnow()))
 
     return query.order_by(distance_m, Game.time)
 
