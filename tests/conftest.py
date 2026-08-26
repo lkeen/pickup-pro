@@ -18,6 +18,7 @@ from sqlalchemy import text
 from app import create_app
 from app.extensions import db as _db
 from app.models import Court, Game, GamePlayer, User
+from app.services import caching
 
 DEFAULT_PASSWORD = "correct-horse-battery"
 
@@ -38,6 +39,12 @@ def app():
     from app.extensions import limiter
 
     limiter.enabled = False
+
+    # Both the cache and the limiter need Redis. Skip rather than fail
+    # confusingly if it is not running.
+    with application.app_context():
+        if not caching.enabled():
+            pytest.skip("Redis is not available (docker compose up -d redis)")
 
     with application.app_context():
         _db.drop_all()
@@ -75,9 +82,11 @@ def db(app):
     """
     with app.app_context():
         _truncate_all_tables()
+        caching.clear_all()
         yield _db
         _db.session.rollback()
         _truncate_all_tables()
+        caching.clear_all()
         _db.session.remove()
 
 
@@ -170,6 +179,15 @@ def csrf_token_from(html):
     match = re.search(r'name="csrf_token"[^>]*value="([^"]+)"', html)
     assert match, "no csrf_token field found in the rendered page"
     return match.group(1)
+
+
+@pytest.fixture()
+def cache(app, db):
+    """Direct access to the cache, already emptied by the db fixture."""
+    from app.extensions import cache as _cache
+
+    with app.app_context():
+        yield _cache
 
 
 @pytest.fixture()

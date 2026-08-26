@@ -10,7 +10,7 @@ from flask import Flask
 # at class-definition time.
 load_dotenv()
 
-from app.extensions import csrf, db, limiter, login_mgr, migrate, oauth  # noqa: E402
+from app.extensions import cache, csrf, db, limiter, login_mgr, migrate, oauth  # noqa: E402
 from config import get_config  # noqa: E402
 
 
@@ -37,6 +37,7 @@ def register_extensions(app):
     # Protects every POST/PUT/PATCH/DELETE app-wide, not only routes that
     # happen to remember to validate a form.
     csrf.init_app(app)
+    cache.init_app(app)
     limiter.init_app(app)
     oauth.init_app(app)
 

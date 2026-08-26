@@ -56,11 +56,16 @@ class BaseConfig:
     REMEMBER_COOKIE_SECURE = False
     REMEMBER_COOKIE_DURATION = timedelta(days=14)
 
-    # --- Rate limiting ---
-    # Redis-backed in a later branch; in-memory is per-process and therefore
-    # wrong behind multiple workers, which is why this is explicit rather than
-    # left to default.
-    RATELIMIT_STORAGE_URI = "memory://"
+    # --- Caching and rate limiting ---
+    # Both are backed by Redis. In-memory storage is per-process, so with more
+    # than one worker the limiter counts a fraction of the real traffic and the
+    # cache holds a different set of entries per worker.
+    CACHE_TYPE = "RedisCache"
+    CACHE_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    CACHE_KEY_PREFIX = "pickup:"
+    CACHE_DEFAULT_TIMEOUT = 120
+
+    RATELIMIT_STORAGE_URI = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     RATELIMIT_HEADERS_ENABLED = True
 
     # Wall-clock times (a game's start) are interpreted and displayed in this
@@ -95,6 +100,10 @@ class TestingConfig(BaseConfig):
     # fixtures then switch the limiter off at runtime, because rate limits would
     # otherwise make the rest of the suite order-dependent and flaky.
     RATELIMIT_ENABLED = True
+    # A dedicated Redis database, so a test run cannot evict or read development
+    # cache entries. Flushed between tests.
+    CACHE_REDIS_URL = os.getenv("TEST_REDIS_URL", "redis://localhost:6379/15")
+    RATELIMIT_STORAGE_URI = os.getenv("TEST_REDIS_URL", "redis://localhost:6379/15")
     # Tests run against a real PostgreSQL database, not SQLite: the spatial
     # queries this project is built around have no SQLite equivalent.
     SQLALCHEMY_DATABASE_URI = os.getenv("TEST_DATABASE_URL") or (

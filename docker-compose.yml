@@ -18,5 +18,26 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    # Backs both the response cache and the rate limiter. In-memory limiter
+    # storage is per-process, so it counts wrong the moment there is more than
+    # one worker.
+    image: redis:7-alpine
+    restart: always
+    # Bounded memory with LRU eviction: a cache that grows without limit is a
+    # memory leak with extra steps.
+    command: >-
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   pgdata:

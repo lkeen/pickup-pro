@@ -21,6 +21,17 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
+      redis:
+        # The cache and the rate limiter are both Redis-backed.
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
       postgres:
         # PostGIS, not plain postgres: the migrations create the extension
         # and courts carries a geography column.
