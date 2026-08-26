@@ -12,6 +12,7 @@ from app.extensions import db
 from app.forms import RatingForm, StatsForm
 from app.models import PlayerRating, PlayerStats
 from app.security import forbid_self, require_roster, require_target_on_roster
+from app.services.aggregates import invalidate_user
 from app.timeutils import utcnow
 
 bp = Blueprint("stats", __name__, url_prefix="/games")
@@ -50,6 +51,9 @@ def submit_stats(game_id):
         )
 
     db.session.commit()
+    # Lifetime totals and every leaderboard now have a stale answer for this
+    # player. Tagged per user, so nobody else's cached profile is disturbed.
+    invalidate_user(g.target_user_id)
     flash("Stats updated successfully!")
     return redirect(url_for("games.detail", game_id=game_id))
 
@@ -84,5 +88,6 @@ def submit_rating(game_id):
         )
 
     db.session.commit()
+    invalidate_user(g.target_user_id)
     flash("Rating submitted successfully!")
     return redirect(url_for("games.detail", game_id=game_id))

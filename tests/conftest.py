@@ -118,7 +118,15 @@ def user_factory(db):
 
 @pytest.fixture()
 def court_factory(db, user_factory):
-    def _make(name="Test Court", lat=33.9519, lng=-83.3576, created_by=None, **kwargs):
+    """Create courts with distinct names by default.
+
+    A unique index forbids two courts with the same name at the same place, so a
+    fixed default name would make the second call in any test fail.
+    """
+    created = []
+
+    def _make(name=None, lat=33.9519, lng=-83.3576, created_by=None, **kwargs):
+        name = name or f"Test Court {len(created) + 1}"
         court = Court(
             name=name,
             address=kwargs.pop("address", "1 Test Street"),
@@ -129,6 +137,7 @@ def court_factory(db, user_factory):
         )
         db.session.add(court)
         db.session.commit()
+        created.append(court)
         return court
 
     return _make

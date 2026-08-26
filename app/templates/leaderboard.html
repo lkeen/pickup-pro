@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block body %}
+<h1>Leaderboard</h1>
+
+<a href="{{ url_for('auth.dashboard') }}">Back to Dashboard</a>
+
+<h2>{{ metric_label }}</h2>
+<form method="GET">
+    <select name="metric" onchange="this.form.submit()">
+        {% for key, label in metrics.items() %}
+            <option value="{{ key }}" {% if key == metric %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <noscript><button type="submit">Show</button></noscript>
+</form>
+
+{% if rows %}
+<table>
+    <thead>
+        <tr><th>#</th><th>Player</th><th>{{ metric_label }}</th><th>Games</th></tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td><a href="{{ url_for('profiles.detail', user_id=row.user_id) }}">{{ row.username }}</a></td>
+            <td>{{ row.value }}</td>
+            <td>{{ row.games }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No stats recorded yet.</p>
+{% endif %}
+
+<h2>Highest rated</h2>
+{% if rated %}
+<table>
+    <thead>
+        <tr><th>#</th><th>Player</th><th>Average rating</th><th>Ratings</th></tr>
+    </thead>
+    <tbody>
+        {% for row in rated %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td><a href="{{ url_for('profiles.detail', user_id=row.user_id) }}">{{ row.username }}</a></td>
+            <td>{{ row.value }}/5</td>
+            <td>{{ row.ratings }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>Nobody has enough ratings yet.</p>
+{% endif %}
+{% endblock %}

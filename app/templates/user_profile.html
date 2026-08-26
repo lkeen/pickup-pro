@@ -6,25 +6,25 @@
 <a href="{{ url_for('auth.dashboard') }}">Back to Dashboard</a>
 
 <h2>Lifetime Statistics</h2>
-{% if stats.games_played %}
+{% if summary.games_played %}
     <table>
-        <tr><td><strong>Games Played:</strong></td><td>{{ stats.games_played }}</td></tr>
-        <tr><td><strong>Total Points:</strong></td><td>{{ stats.total_points or 0 }}</td></tr>
-        <tr><td><strong>Total Rebounds:</strong></td><td>{{ stats.total_rebounds or 0 }}</td></tr>
-        <tr><td><strong>Total Assists:</strong></td><td>{{ stats.total_assists or 0 }}</td></tr>
-        <tr><td><strong>Average Points:</strong></td><td>{{ "%.1f"|format(stats.avg_points or 0) }}</td></tr>
-        <tr><td><strong>Average Rebounds:</strong></td><td>{{ "%.1f"|format(stats.avg_rebounds or 0) }}</td></tr>
-        <tr><td><strong>Average Assists:</strong></td><td>{{ "%.1f"|format(stats.avg_assists or 0) }}</td></tr>
+        <tr><td><strong>Games Played:</strong></td><td>{{ summary.games_played }}</td></tr>
+        <tr><td><strong>Total Points:</strong></td><td>{{ summary.total_points }}</td></tr>
+        <tr><td><strong>Total Rebounds:</strong></td><td>{{ summary.total_rebounds }}</td></tr>
+        <tr><td><strong>Total Assists:</strong></td><td>{{ summary.total_assists }}</td></tr>
+        <tr><td><strong>Average Points:</strong></td><td>{{ "%.1f"|format(summary.avg_points) }}</td></tr>
+        <tr><td><strong>Average Rebounds:</strong></td><td>{{ "%.1f"|format(summary.avg_rebounds) }}</td></tr>
+        <tr><td><strong>Average Assists:</strong></td><td>{{ "%.1f"|format(summary.avg_assists) }}</td></tr>
     </table>
 {% else %}
     <p>No game statistics available yet.</p>
 {% endif %}
 
 <h2>Player Rating</h2>
-{% if ratings.total_ratings %}
+{% if summary.total_ratings %}
     <table>
-        <tr><td><strong>Total Ratings Received:</strong></td><td>{{ ratings.total_ratings }}</td></tr>
-        <tr><td><strong>Average Rating:</strong></td><td>{{ "%.2f"|format(ratings.avg_rating) }}/5</td></tr>
+        <tr><td><strong>Total Ratings Received:</strong></td><td>{{ summary.total_ratings }}</td></tr>
+        <tr><td><strong>Average Rating:</strong></td><td>{{ "%.2f"|format(summary.avg_rating) }}/5</td></tr>
     </table>
 {% else %}
     <p>No ratings received yet.</p>

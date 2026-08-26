@@ -23,7 +23,6 @@
             <tr>
                 <th>Name</th>
                 <th>Address</th>
-                <th>Created By</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -32,7 +31,6 @@
             <tr>
                 <td>{{ court.name }}</td>
                 <td>{{ court.address }}</td>
-                <td>{{ court.creator.username }}</td>
                 <td>
                     <a href="{{ url_for('games.index', court_id=court.id) }}">View Games</a>
                 </td>
