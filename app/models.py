@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from flask_login import UserMixin
+from geoalchemy2 import Geography
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
@@ -58,8 +59,26 @@ class Court(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     name = db.Column(db.String(64), nullable = False)
     address = db.Column(db.String(120), nullable = False)
+    # lat/lng stay the source of truth: they are what a form submits and what
+    # gets displayed.
     lat = db.Column(db.Float, nullable = False)
     lng = db.Column(db.Float, nullable = False)
+    # Derived from them by PostgreSQL, never written by the application. A
+    # generated column cannot drift from lat/lng the way a trigger-maintained or
+    # application-maintained one can, and it holds for every write path --
+    # including bulk inserts that bypass the ORM entirely.
+    #
+    # geography, not geometry: distances come out in metres on the spheroid, so
+    # ST_DWithin takes a real radius rather than degrees.
+    #
+    # spatial_index=False because GeoAlchemy2 would otherwise create the GiST
+    # index through a DDL event; it is created explicitly in a migration so it
+    # can be built CONCURRENTLY.
+    geog = db.Column(
+        Geography(geometry_type = "POINT", srid = 4326, spatial_index = False),
+        db.Computed("ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography", persisted = True),
+        nullable = False,
+    )
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable = False)
     created_at = db.Column(db.DateTime, default = datetime.now)
 

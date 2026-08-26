@@ -22,7 +22,9 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # PostGIS, not plain postgres: the migrations create the extension
+        # and courts carries a geography column.
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: pickup_user
           POSTGRES_PASSWORD: pickup_password

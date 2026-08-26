@@ -1,6 +1,10 @@
 services:
   db:
-    image: postgres:16
+    # PostGIS rather than plain postgres: court search is an ST_DWithin query
+    # against a GiST-indexed geography column. The image is postgres:16 with the
+    # PostGIS libraries added, so an existing pgdata volume carries over
+    # unchanged -- only the extension has to be created, which a migration does.
+    image: postgis/postgis:16-3.4
     restart: always
     env_file:
       - .env
@@ -8,5 +12,11 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   pgdata:
