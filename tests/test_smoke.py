@@ -34,7 +34,9 @@ def test_protected_pages_redirect_anonymous_users(client, path, requires_login):
 def test_landing_page_renders_for_anonymous_users(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert "Welcome" in response.get_data(as_text=True)
+    body = response.get_data(as_text=True)
+    assert "Log in" in body
+    assert "Create an account" in body
 
 
 def test_game_detail_renders(login, user_factory, game_factory):
@@ -44,8 +46,9 @@ def test_game_detail_renders(login, user_factory, game_factory):
     response = client.get(f"/games/{game.id}")
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "Game Details" in body
+    assert "Roster" in body
     assert host.username in body
+    assert game.court.name in body
 
 
 def test_profile_renders_with_no_stats(login, user_factory):

@@ -1,45 +1,37 @@
 {% extends "base.html" %}
+{% block title %}Host a game — Pickup Pro{% endblock %}
 
 {% block body %}
-<h1>Create New Game</h1>
+<div class="auth-layout">
+  <div class="card">
+    <h1>Host a game</h1>
+    <p class="lede">Pick a court and a time; people can join from there.</p>
 
-{% with messages = get_flashed_messages() %}
-    {% if messages %}
-        <div class="messages">
-            {% for message in messages %}
-                <div class="alert">{{ message }}</div>
-            {% endfor %}
-        </div>
-    {% endif %}
-{% endwith %}
-
-<form method="POST">
-    {{ form.hidden_tag() }}
-    <div>
-        <label for="court_id">Court:</label>
+    <form method="POST" style="margin-top:1.5rem">
+      {{ form.hidden_tag() }}
+      <div class="field">
+        <label for="court_id">Court</label>
         <select id="court_id" name="court_id" required>
-            <option value="">Select a court</option>
-            {% for value, label in form.court_id.choices %}
-                <option value="{{ value }}" {% if form.court_id.data == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
+          <option value="">Select a court</option>
+          {% for value, label in form.court_id.choices %}
+            <option value="{{ value }}" {% if form.court_id.data == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
         </select>
-        {% for e in form.court_id.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
-    </div>
-
-    <div>
-        <label for="time">Date and Time:</label>
+        {% for e in form.court_id.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="time">Date and time</label>
         <input type="datetime-local" id="time" name="time" required>
-        {% for e in form.time.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
-    </div>
-
-    <div>
-        <label for="max_players">Max Players:</label>
-        <input type="number" id="max_players" name="max_players" value="{{ form.max_players.data or 10 }}" min="2" max="20" required>
-        {% for e in form.max_players.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
-    </div>
-
-    <button type="submit">Create Game</button>
-</form>
-
-<a href="{{ url_for('games.index') }}">Back to Games</a>
+        {% for e in form.time.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="max_players">Max players</label>
+        <input type="number" id="max_players" name="max_players"
+               value="{{ form.max_players.data or 10 }}" min="2" max="20" required>
+        {% for e in form.max_players.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </div>
+      <button type="submit" class="btn btn--primary btn--block">Create game</button>
+    </form>
+  </div>
+</div>
 {% endblock %}

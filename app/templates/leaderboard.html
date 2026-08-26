@@ -1,58 +1,64 @@
 {% extends "base.html" %}
+{% block title %}Leaderboard — Pickup Pro{% endblock %}
 
 {% block body %}
-<h1>Leaderboard</h1>
-
-<a href="{{ url_for('auth.dashboard') }}">Back to Dashboard</a>
-
-<h2>{{ metric_label }}</h2>
-<form method="GET">
-    <select name="metric" onchange="this.form.submit()">
-        {% for key, label in metrics.items() %}
-            <option value="{{ key }}" {% if key == metric %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
+<div class="page-header">
+  <h1>Leaderboard</h1>
+  <form method="GET" class="page-header__actions">
+    <select name="metric" onchange="this.form.submit()" aria-label="Metric">
+      {% for key, label in metrics.items() %}
+        <option value="{{ key }}" {% if key == metric %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
     </select>
-    <noscript><button type="submit">Show</button></noscript>
-</form>
+    <noscript><button type="submit" class="btn">Show</button></noscript>
+  </form>
+</div>
 
-{% if rows %}
-<table>
-    <thead>
-        <tr><th>#</th><th>Player</th><th>{{ metric_label }}</th><th>Games</th></tr>
-    </thead>
-    <tbody>
-        {% for row in rows %}
-        <tr>
-            <td>{{ loop.index }}</td>
+<div class="grid grid--2">
+  <div class="card card--flush">
+    <div style="padding:1rem 1.25rem 0"><h3>{{ metric_label }}</h3></div>
+    {% if rows %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Player</th><th class="numeric">{{ metric_label }}</th><th class="numeric">Games</th></tr></thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="muted">{{ loop.index }}</td>
             <td><a href="{{ url_for('profiles.detail', user_id=row.user_id) }}">{{ row.username }}</a></td>
-            <td>{{ row.value }}</td>
-            <td>{{ row.games }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p>No stats recorded yet.</p>
-{% endif %}
+            <td class="numeric"><strong>{{ row.value }}</strong></td>
+            <td class="numeric muted">{{ row.games }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty"><p>No stats recorded yet.</p></div>
+    {% endif %}
+  </div>
 
-<h2>Highest rated</h2>
-{% if rated %}
-<table>
-    <thead>
-        <tr><th>#</th><th>Player</th><th>Average rating</th><th>Ratings</th></tr>
-    </thead>
-    <tbody>
-        {% for row in rated %}
-        <tr>
-            <td>{{ loop.index }}</td>
+  <div class="card card--flush">
+    <div style="padding:1rem 1.25rem 0"><h3>Highest rated</h3></div>
+    {% if rated %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Player</th><th class="numeric">Rating</th><th class="numeric">Votes</th></tr></thead>
+        <tbody>
+          {% for row in rated %}
+          <tr>
+            <td class="muted">{{ loop.index }}</td>
             <td><a href="{{ url_for('profiles.detail', user_id=row.user_id) }}">{{ row.username }}</a></td>
-            <td>{{ row.value }}/5</td>
-            <td>{{ row.ratings }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p>Nobody has enough ratings yet.</p>
-{% endif %}
+            <td class="numeric"><strong>{{ row.value }}</strong><span class="muted">/5</span></td>
+            <td class="numeric muted">{{ row.ratings }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty"><p>Nobody has enough ratings yet.</p></div>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

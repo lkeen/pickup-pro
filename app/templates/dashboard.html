@@ -1,23 +1,30 @@
 {% extends "base.html" %}
+{% block title %}Dashboard — Pickup Pro{% endblock %}
+
 {% block body %}
-<div class="container">
-  <h1>Welcome, {{ username }}!</h1>
+<div class="page-header">
+  <div>
+    <h1>Welcome back, {{ username }}</h1>
+    <p class="lede">Find a game or start one.</p>
+  </div>
+  <div class="page-header__actions">
+    <a href="{{ url_for('games.create') }}" class="btn btn--primary">Host a game</a>
+    <a href="{{ url_for('courts.create') }}" class="btn">Add a court</a>
+  </div>
+</div>
 
-  <nav>
-    <h2>Navigation</h2>
-    <ul>
-      <li><a href="{{ url_for('profiles.detail', user_id=current_user.id) }}">My Profile & Stats</a></li>
-      <li><a href="{{ url_for('courts.index') }}">View Courts</a></li>
-      <li><a href="{{ url_for('courts.create') }}">Create New Court</a></li>
-      <li><a href="{{ url_for('games.index') }}">View Games</a></li>
-      <li><a href="{{ url_for('games.create') }}">Create New Game</a></li>
-      <li><a href="{{ url_for('leaderboard.index') }}">Leaderboard</a></li>
-    </ul>
-  </nav>
-
-  <form method="POST" action="{{ url_for('auth.logout') }}">
-    {{ logout_form.hidden_tag() }}
-    <button type="submit" class="btn btn-logout">Logout</button>
-  </form>
+<div class="grid grid--3">
+  <a class="card" href="{{ url_for('games.index') }}" style="text-decoration:none;color:inherit">
+    <h3>Games</h3>
+    <p class="muted small">Browse what is on, join a roster, or leave one.</p>
+  </a>
+  <a class="card" href="{{ url_for('courts.index') }}" style="text-decoration:none;color:inherit">
+    <h3>Courts</h3>
+    <p class="muted small">Every court on the map, and the games at each.</p>
+  </a>
+  <a class="card" href="{{ url_for('leaderboard.index') }}" style="text-decoration:none;color:inherit">
+    <h3>Leaderboard</h3>
+    <p class="muted small">Top scorers, rebounders, and the highest rated.</p>
+  </a>
 </div>
 {% endblock %}

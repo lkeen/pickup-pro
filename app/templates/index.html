@@ -1,37 +1,58 @@
 {% extends "base.html" %}
+{% block title %}Sign in — Pickup Pro{% endblock %}
+
 {% block body %}
-<div class="container">
-  {% if error %}<p style="color:red">{{ error }}</p>{% endif %}
-  <h1>Welcome</h1>
+<div class="auth-layout">
+  <div class="card">
+    <h1>Find a run near you</h1>
+    <p class="lede">Host a game, join a roster, keep the stats.</p>
 
-  <h2>Log in</h2>
-  <form method="post" action="{{ url_for('auth.login') }}">
-    {{ login_form.hidden_tag() }}
-    <input type="text" name="username" placeholder="username" class="input-field" required />
-    <input type="password" name="password" placeholder="password" class="input-field" required />
-    <input type="submit" value="Login" class="btn btn-login" />
-  </form>
+    {% if error %}<div class="flash flash--error" style="margin-top:1rem">{{ error }}</div>{% endif %}
 
-  {% if config.GOOGLE_OAUTH_READY %}
-  <p>or</p>
-  <a href="{{ url_for('oauth.start') }}" class="btn btn-google">Continue with Google</a>
-  {% endif %}
+    <h2>Log in</h2>
+    <form method="post" action="{{ url_for('auth.login') }}">
+      {{ login_form.hidden_tag() }}
+      <div class="field">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" name="username" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" name="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn--primary btn--block">Log in</button>
+    </form>
 
-  <h2>Register</h2>
-  <form method="post" action="{{ url_for('auth.register') }}">
-    {{ register_form.hidden_tag() }}
-    <input type="text" name="username" placeholder="username"
-           value="{{ register_form.username.data or '' }}" class="input-field" required />
-    {% for e in register_form.username.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
+    {% if config.GOOGLE_OAUTH_READY %}
+      <div class="auth-divider">or</div>
+      <a href="{{ url_for('oauth.start') }}" class="btn btn--block">Continue with Google</a>
+    {% endif %}
+  </div>
 
-    <input type="email" name="email" placeholder="email"
-           value="{{ register_form.email.data or '' }}" class="input-field" required />
-    {% for e in register_form.email.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
-
-    <input type="password" name="password" placeholder="password" class="input-field" required />
-    {% for e in register_form.password.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
-
-    <input type="submit" value="Register" class="btn btn-register" />
-  </form>
+  <div class="card">
+    <h2 style="margin-top:0">Create an account</h2>
+    <form method="post" action="{{ url_for('auth.register') }}">
+      {{ register_form.hidden_tag() }}
+      <div class="field">
+        <label for="reg-username">Username</label>
+        <input type="text" id="reg-username" name="username" autocomplete="username"
+               value="{{ register_form.username.data or '' }}" required>
+        {% for e in register_form.username.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="reg-email">Email</label>
+        <input type="email" id="reg-email" name="email" autocomplete="email"
+               value="{{ register_form.email.data or '' }}" required>
+        {% for e in register_form.email.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="reg-password">Password</label>
+        <input type="password" id="reg-password" name="password" autocomplete="new-password" required>
+        <span class="small muted">At least 10 characters.</span>
+        {% for e in register_form.password.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </div>
+      <button type="submit" class="btn btn--block">Register</button>
+    </form>
+  </div>
 </div>
 {% endblock %}

@@ -25,6 +25,7 @@ def create_app(config_name=None):
     app.config.from_object(config_class)
 
     register_extensions(app)
+    register_template_helpers(app)
     register_blueprints(app)
 
     return app
@@ -61,6 +62,39 @@ def register_extensions(app):
     # "strong" ties the session to a hash of the client's IP and user agent
     # and drops it when they change, so a lifted cookie is less portable.
     login_mgr.session_protection = "strong"
+
+
+def register_template_helpers(app):
+    """Make a CSRF field available to any template.
+
+    The nav renders a logout form on every page, so requiring each view to pass
+    a form object down would be a rule everyone forgets exactly once.
+    """
+    from flask_wtf.csrf import generate_csrf
+    from markupsafe import Markup
+
+    @app.template_global()
+    def csrf_field():
+        return Markup(
+            f'<input type="hidden" name="csrf_token" value="{generate_csrf()}">'
+        )
+
+    from app.timeutils import to_local
+
+    @app.template_filter("localtime")
+    def localtime(value, fmt="%a %d %b, %H:%M"):
+        """Render a stored UTC instant as wall-clock in APP_TIMEZONE.
+
+        Templates were calling .strftime() directly on the column, which printed
+        UTC and called it local.
+        """
+        if value is None:
+            return ""
+        return to_local(value).strftime(fmt)
+
+    @app.template_filter("localdate")
+    def localdate(value, fmt="%Y-%m-%d"):
+        return localtime(value, fmt)
 
 
 def register_blueprints(app):

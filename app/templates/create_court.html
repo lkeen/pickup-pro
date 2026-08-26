@@ -1,46 +1,40 @@
 {% extends "base.html" %}
+{% block title %}Add a court — Pickup Pro{% endblock %}
 
 {% block body %}
-<h1>Create New Court</h1>
+<div class="auth-layout">
+  <div class="card">
+    <h1>Add a court</h1>
+    <p class="lede">Where does the run happen?</p>
 
-{% with messages = get_flashed_messages() %}
-    {% if messages %}
-        <div class="messages">
-            {% for message in messages %}
-                <div class="alert">{{ message }}</div>
-            {% endfor %}
-        </div>
-    {% endif %}
-{% endwith %}
-
-<form method="POST">
-    {{ form.hidden_tag() }}
-    <div>
-        <label for="name">Court Name:</label>
+    <form method="POST" style="margin-top:1.5rem">
+      {{ form.hidden_tag() }}
+      <div class="field">
+        <label for="name">Court name</label>
         <input type="text" id="name" name="name" value="{{ form.name.data or '' }}" required>
-        {% for e in form.name.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
-    </div>
-
-    <div>
-        <label for="address">Address:</label>
+        {% for e in form.name.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="address">Address</label>
         <input type="text" id="address" name="address" value="{{ form.address.data or '' }}" required>
-        {% for e in form.address.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
-    </div>
-
-    <div>
-        <label for="lat">Latitude:</label>
-        <input type="number" step="any" id="lat" name="lat" value="{{ form.lat.data if form.lat.data is not none else '' }}" required>
-        {% for e in form.lat.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
-    </div>
-
-    <div>
-        <label for="lng">Longitude:</label>
-        <input type="number" step="any" id="lng" name="lng" value="{{ form.lng.data if form.lng.data is not none else '' }}" required>
-        {% for e in form.lng.errors %}<span style="color:red">{{ e }}</span>{% endfor %}
-    </div>
-
-    <button type="submit">Create Court</button>
-</form>
-
-<a href="{{ url_for('courts.index') }}">Back to Courts</a>
+        {% for e in form.address.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="lat">Latitude</label>
+          <input type="number" step="any" id="lat" name="lat"
+                 value="{{ form.lat.data if form.lat.data is not none else '' }}" required>
+          {% for e in form.lat.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+        </div>
+        <div class="field">
+          <label for="lng">Longitude</label>
+          <input type="number" step="any" id="lng" name="lng"
+                 value="{{ form.lng.data if form.lng.data is not none else '' }}" required>
+          {% for e in form.lng.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+        </div>
+      </div>
+      <button type="submit" class="btn btn--primary btn--block">Add court</button>
+    </form>
+  </div>
+</div>
 {% endblock %}

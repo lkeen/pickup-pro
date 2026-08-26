@@ -1,87 +1,79 @@
 {% extends "base.html" %}
+{% block title %}{{ user.username }} — Pickup Pro{% endblock %}
 
 {% block body %}
-<h1>{{ user.username }}'s Profile</h1>
+<div class="page-header">
+  <div>
+    <h1>{{ user.username }}</h1>
+    <p class="lede">
+      {% if summary.avg_rating is not none %}
+        Rated {{ "%.2f"|format(summary.avg_rating) }}/5 across {{ summary.total_ratings }} ratings
+      {% else %}
+        No ratings yet
+      {% endif %}
+    </p>
+  </div>
+</div>
 
-<a href="{{ url_for('auth.dashboard') }}">Back to Dashboard</a>
+<div class="card">
+  <h3>Lifetime</h3>
+  {% if summary.games_played %}
+  <div class="stat-grid">
+    <div class="stat"><span class="stat__value">{{ summary.games_played }}</span><span class="stat__label">Games</span></div>
+    <div class="stat"><span class="stat__value">{{ summary.total_points }}</span><span class="stat__label">Points</span></div>
+    <div class="stat"><span class="stat__value">{{ summary.total_rebounds }}</span><span class="stat__label">Rebounds</span></div>
+    <div class="stat"><span class="stat__value">{{ summary.total_assists }}</span><span class="stat__label">Assists</span></div>
+    <div class="stat"><span class="stat__value">{{ "%.1f"|format(summary.avg_points) }}</span><span class="stat__label">Pts / game</span></div>
+    <div class="stat"><span class="stat__value">{{ "%.1f"|format(summary.avg_rebounds) }}</span><span class="stat__label">Reb / game</span></div>
+    <div class="stat"><span class="stat__value">{{ "%.1f"|format(summary.avg_assists) }}</span><span class="stat__label">Ast / game</span></div>
+  </div>
+  {% else %}
+  <p class="muted">No game statistics available yet.</p>
+  {% endif %}
+</div>
 
-<h2>Lifetime Statistics</h2>
-{% if summary.games_played %}
-    <table>
-        <tr><td><strong>Games Played:</strong></td><td>{{ summary.games_played }}</td></tr>
-        <tr><td><strong>Total Points:</strong></td><td>{{ summary.total_points }}</td></tr>
-        <tr><td><strong>Total Rebounds:</strong></td><td>{{ summary.total_rebounds }}</td></tr>
-        <tr><td><strong>Total Assists:</strong></td><td>{{ summary.total_assists }}</td></tr>
-        <tr><td><strong>Average Points:</strong></td><td>{{ "%.1f"|format(summary.avg_points) }}</td></tr>
-        <tr><td><strong>Average Rebounds:</strong></td><td>{{ "%.1f"|format(summary.avg_rebounds) }}</td></tr>
-        <tr><td><strong>Average Assists:</strong></td><td>{{ "%.1f"|format(summary.avg_assists) }}</td></tr>
-    </table>
-{% else %}
-    <p>No game statistics available yet.</p>
-{% endif %}
-
-<h2>Player Rating</h2>
-{% if summary.total_ratings %}
-    <table>
-        <tr><td><strong>Total Ratings Received:</strong></td><td>{{ summary.total_ratings }}</td></tr>
-        <tr><td><strong>Average Rating:</strong></td><td>{{ "%.2f"|format(summary.avg_rating) }}/5</td></tr>
-    </table>
-{% else %}
-    <p>No ratings received yet.</p>
-{% endif %}
-
-<h2>Recent Games</h2>
-{% if recent_games %}
-    <table>
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Court</th>
-                <th>Points</th>
-                <th>Rebounds</th>
-                <th>Assists</th>
-            </tr>
-        </thead>
+<div class="grid grid--2" style="margin-top:1rem">
+  <div class="card card--flush">
+    <div style="padding:1rem 1.25rem 0"><h3>Recent games</h3></div>
+    {% if recent_games %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Court</th><th class="numeric">Pts</th><th class="numeric">Reb</th><th class="numeric">Ast</th></tr></thead>
         <tbody>
-            {% for game, stats in recent_games %}
-            <tr>
-                <td>{{ game.time.strftime('%Y-%m-%d') }}</td>
-                <td>{{ game.court.name }}</td>
-                <td>{{ stats.points }}</td>
-                <td>{{ stats.rebounds }}</td>
-                <td>{{ stats.assists }}</td>
-            </tr>
-            {% endfor %}
+          {% for game, stats in recent_games %}
+          <tr>
+            <td class="muted">{{ game.time | localdate }}</td>
+            <td>{{ game.court.name }}</td>
+            <td class="numeric">{{ stats.points }}</td>
+            <td class="numeric">{{ stats.rebounds }}</td>
+            <td class="numeric">{{ stats.assists }}</td>
+          </tr>
+          {% endfor %}
         </tbody>
-    </table>
-{% else %}
-    <p>No recent games with stats available.</p>
-{% endif %}
+      </table>
+    </div>
+    {% else %}<div class="empty"><p>No games with stats yet.</p></div>{% endif %}
+  </div>
 
-<h2>Recent Ratings Received</h2>
-{% if recent_ratings %}
-    <table>
-        <thead>
-            <tr>
-                <th>From Player</th>
-                <th>Rating</th>
-                <th>Comment</th>
-                <th>Date</th>
-            </tr>
-        </thead>
+  <div class="card card--flush">
+    <div style="padding:1rem 1.25rem 0"><h3>Recent ratings</h3></div>
+    {% if recent_ratings %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>From</th><th class="numeric">Rating</th><th>Comment</th><th>Date</th></tr></thead>
         <tbody>
-            {% for rating, from_user in recent_ratings %}
-            <tr>
-                <td>{{ from_user.username }}</td>
-                <td>{{ rating.rating }}/5</td>
-                <td>{{ rating.comment if rating.comment else '-' }}</td>
-                <td>{{ rating.created_at.strftime('%Y-%m-%d') }}</td>
-            </tr>
-            {% endfor %}
+          {% for rating, from_user in recent_ratings %}
+          <tr>
+            <td>{{ from_user.username }}</td>
+            <td class="numeric"><strong>{{ rating.rating }}</strong><span class="muted">/5</span></td>
+            <td class="muted">{{ rating.comment if rating.comment else "—" }}</td>
+            <td class="muted small">{{ rating.created_at | localdate }}</td>
+          </tr>
+          {% endfor %}
         </tbody>
-    </table>
-{% else %}
-    <p>No ratings received yet.</p>
-{% endif %}
-
+      </table>
+    </div>
+    {% else %}<div class="empty"><p>No ratings received yet.</p></div>{% endif %}
+  </div>
+</div>
 {% endblock %}
