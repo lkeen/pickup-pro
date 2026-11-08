@@ -1,4 +1,4 @@
-"""Game listing, creation, roster management and nearby search."""
+"""Game listing, creation, roster management and detail."""
 
 from datetime import datetime, timedelta
 
@@ -10,53 +10,62 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.forms import ConfirmForm, GameForm, RatingForm, StatsForm
 from app.models import Court, Game, GamePlayer, PlayerRating, PlayerStats
+from app.services.aggregates import all_courts_brief
 from app.services.geo import invalidate_area
-from app.timeutils import to_utc
+from app.timeutils import to_utc, utcnow
 
 bp = Blueprint("games", __name__, url_prefix="/games")
+
+PAGE_SIZE = 20
 
 
 @bp.route("")
 @login_required
 def index():
-    court_id = request.args.get("court_id")
-    date = request.args.get("date")
+    court_id = request.args.get("court_id", type=int)
+    date = _parse_date(request.args.get("date"))
 
     # Without these the template triggers a query per row for each of
-    # game.court, game.host, game.players and game.can_join() -- roughly 4N
-    # extra round trips to render N rows.
-    #
-    # joinedload for the many-to-one sides (one row each, cheap to widen the
-    # join); selectinload for the roster, where a join would multiply the
-    # result set by the number of players.
-    query = Game.query.options(
+    # game.court, game.host, game.players and game.can_join(). joinedload for
+    # the many-to-one sides, selectinload for the roster -- joining that would
+    # multiply the result set by the number of players.
+    query = db.select(Game).options(
         joinedload(Game.court),
         joinedload(Game.host),
         selectinload(Game.players),
     )
-    if court_id:
-        query = query.filter_by(court_id=court_id)
-    if date:
-        try:
-            # Deliberately naive: a calendar date has no timezone until it is
-            # anchored to one, which to_utc does on the next line.
-            date_obj = datetime.strptime(date, "%Y-%m-%d").date()  # noqa: DTZ007
-            start = to_utc(datetime.combine(date_obj, datetime.min.time()))
-            query = query.filter(Game.time >= start, Game.time < start + timedelta(days=1))
-        except ValueError:
-            pass
+    if court_id is not None:
+        query = query.filter(Game.court_id == court_id)
+    if date is not None:
+        start = to_utc(datetime.combine(date, datetime.min.time()))
+        query = query.filter(Game.time >= start, Game.time < start + timedelta(days=1))
+    else:
+        # Default to what people come here for. Without a bound the listing
+        # grows without limit and page one is the oldest game ever played.
+        query = query.filter(Game.time >= utcnow())
 
-    games = query.order_by(Game.time).all()
-    courts = Court.query.all()
+    pagination = db.paginate(
+        query.order_by(Game.time),
+        page=request.args.get("page", 1, type=int),
+        per_page=PAGE_SIZE,
+        error_out=False,
+    )
+
     return render_template(
-        "games.html", games=games, courts=courts, confirm_form=ConfirmForm()
+        "games.html",
+        games=pagination.items,
+        pagination=pagination,
+        # Carried into the pager links so paging does not drop the filters.
+        filters={key: value for key, value in request.args.items() if key != "page"},
+        courts=all_courts_brief(),
+        confirm_form=ConfirmForm(),
     )
 
 
 @bp.route("/create", methods=["GET", "POST"])
 @login_required
 def create():
-    form = GameForm().set_court_choices(Court.query.all())
+    form = GameForm().set_court_choices(all_courts_brief())
     if form.validate_on_submit():
         game = Game(
             court_id=form.court_id.data,
@@ -80,12 +89,10 @@ def join(game_id):
         flash("Could not verify that request. Please try again.")
         return redirect(url_for("games.index"))
 
-    # Lock the game row for the rest of the transaction. Two requests racing to
-    # take the last slot now queue here instead of both reading "one slot left"
-    # and both inserting.
-    game = db.session.execute(
-        db.select(Game).where(Game.id == game_id).with_for_update()
-    ).scalar_one_or_none()
+    # Lock the game row for the rest of the transaction. Two requests racing for
+    # the last slot queue here instead of both reading "one slot left" and both
+    # inserting.
+    game = db.session.scalar(db.select(Game).where(Game.id == game_id).with_for_update())
     if game is None:
         abort(404)
 
@@ -98,15 +105,13 @@ def join(game_id):
     try:
         db.session.commit()
     except IntegrityError:
-        # The database enforces capacity too, via a trigger. Reaching this means
-        # the lock above was bypassed by some other write path -- the constraint
-        # is the backstop, not the primary mechanism.
+        # A trigger enforces capacity as well. Reaching this means the lock was
+        # bypassed by some other write path: the constraint is the backstop, not
+        # the primary mechanism.
         db.session.rollback()
         flash("Cannot join this game (full or already joined).")
         return redirect(url_for("games.index"))
 
-    # The nearby response carries current_players and spots_available, so a
-    # roster change makes every cached search covering this court wrong.
     _invalidate_searches_for(game)
     flash("Successfully joined the game!")
     return redirect(url_for("games.index"))
@@ -115,23 +120,20 @@ def join(game_id):
 @bp.route("/<int:game_id>/leave", methods=["POST"])
 @login_required
 def leave(game_id):
-    db.get_or_404(Game, game_id)  # 404s on a missing game
+    game = db.get_or_404(Game, game_id)
 
     if not ConfirmForm().validate_on_submit():
         flash("Could not verify that request. Please try again.")
         return redirect(url_for("games.index"))
 
-    game_player = GamePlayer.query.filter_by(
-        game_id=game_id, user_id=current_user.id
-    ).first()
-
-    if not game_player:
+    membership = db.session.get(GamePlayer, (game_id, current_user.id))
+    if membership is None:
         flash("You are not in this game.")
         return redirect(url_for("games.index"))
 
-    db.session.delete(game_player)
+    db.session.delete(membership)
     db.session.commit()
-    _invalidate_searches_for(db.session.get(Game, game_id))
+    _invalidate_searches_for(game)
     flash("Successfully left the game!")
     return redirect(url_for("games.index"))
 
@@ -139,33 +141,50 @@ def leave(game_id):
 @bp.route("/<int:game_id>")
 @login_required
 def detail(game_id):
-    game = db.get_or_404(Game, game_id)
-    is_rostered = current_user in game.players
+    game = db.session.scalar(
+        db.select(Game)
+        .where(Game.id == game_id)
+        .options(joinedload(Game.court), joinedload(Game.host), selectinload(Game.players))
+    )
+    if game is None:
+        abort(404)
 
-    # Get current stats for this game
-    player_stats = PlayerStats.query.filter_by(game_id=game_id).all()
-    stats_dict = {stat.user_id: stat for stat in player_stats}
-
-    # Get current ratings for this game (that current user has given)
-    my_ratings = PlayerRating.query.filter_by(
-        game_id=game_id, from_user_id=current_user.id
+    stats = db.session.scalars(
+        db.select(PlayerStats).filter_by(game_id=game_id)
     ).all()
-    ratings_dict = {rating.to_user_id: rating for rating in my_ratings}
+    my_ratings = db.session.scalars(
+        db.select(PlayerRating).filter_by(game_id=game_id, from_user_id=current_user.id)
+    ).all()
 
     return render_template(
         "game_detail.html",
         game=game,
-        is_rostered=is_rostered,
-        stats_dict=stats_dict,
-        ratings_dict=ratings_dict,
+        is_rostered=current_user in game.players,
+        stats_dict={stat.user_id: stat for stat in stats},
+        ratings_dict={rating.to_user_id: rating for rating in my_ratings},
         stats_form=StatsForm(),
         rating_form=RatingForm(),
         confirm_form=ConfirmForm(),
     )
 
 
+def _parse_date(raw):
+    if not raw:
+        return None
+    try:
+        # Naive on purpose: a calendar date has no timezone until it is anchored
+        # to one, which to_utc does for it.
+        return datetime.strptime(raw, "%Y-%m-%d").date()  # noqa: DTZ007
+    except ValueError:
+        return None
+
+
 def _invalidate_searches_for(game):
-    """Drop cached nearby searches that could have included this game."""
+    """Drop cached nearby searches that could have included this game.
+
+    A nearby result carries current_players and spots_available, so a roster
+    change makes every cached search covering that court wrong.
+    """
     if game is None:
         return
     court = game.court or db.session.get(Court, game.court_id)

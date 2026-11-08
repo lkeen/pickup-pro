@@ -1,14 +1,10 @@
 """Structured logging and request timing.
 
-Flask's default access log is a line of text per request with no timing and no
-correlation between the lines belonging to one request. That is fine until
-something is slow in production and the only question worth answering is "slow
-for whom, and on which request".
-
-Every log line here is JSON with a request id, so a request's lines can be
-gathered from a log aggregator by one field. In development the same events are
-rendered as readable console lines instead, because JSON is unreadable in a
-terminal and a format nobody reads gets ignored.
+Every log line is JSON carrying a request id, so the lines belonging to one
+request can be gathered from a log aggregator by a single field -- which is the
+only thing that helps when the question is "slow for whom, on which request".
+Development renders the same events as console lines, because a format nobody
+can read in a terminal gets ignored.
 """
 
 import logging
@@ -18,8 +14,8 @@ import uuid
 import structlog
 from flask import g, request
 
-# Requests whose timing is noise: health checks fire every 30 seconds and static
-# assets are served by a CDN or the reverse proxy in any real deployment.
+# Timing noise: health checks fire every 30 seconds, and static assets are
+# served by the proxy in any real deployment.
 QUIET_PATHS = ("/healthz", "/static/")
 
 # Above this, a request is worth noticing regardless of what it was doing.
@@ -34,11 +30,11 @@ def configure(app):
 
 
 def configure_structlog(app):
-    """Choose and install the global log format.
+    """Install the global log format.
 
     Separate from the request hooks because structlog's configuration is global
-    and can be reset at any time, whereas Flask refuses to register a
-    before_request handler once an app has served a request.
+    and resettable, whereas Flask refuses to register a before_request handler
+    once an app has served a request.
     """
     json_logs = not app.debug and not app.testing
 
@@ -88,9 +84,6 @@ def install_request_logging(app, logger):
         response.headers["X-Request-ID"] = g.get("request_id", "")
 
         event = {
-            # Also bound as a contextvar, which covers log lines emitted from
-            # anywhere inside the request. Set explicitly here as well so the
-            # access line carries it regardless of processor configuration.
             "request_id": g.get("request_id", ""),
             "method": request.method,
             "path": request.path,

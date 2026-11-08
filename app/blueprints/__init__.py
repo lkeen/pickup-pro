@@ -1,8 +1,4 @@
-"""Blueprint registration.
-
-Routes were previously all defined inside ``create_app``. They are grouped here
-by resource so that each area of the app has an obvious home.
-"""
+"""Blueprint registration, grouped by resource."""
 
 from app.blueprints.api import bp as api_bp
 from app.blueprints.auth import bp as auth_bp

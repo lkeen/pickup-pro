@@ -9,6 +9,9 @@ services:
       # localhost -- the .env values point at the host's published ports and are
       # correct for running the app outside Docker.
       APP_ENV: production
+      # Nothing fronts the app in compose -- the port is published directly --
+      # so X-Forwarded-* headers from a client must not be believed.
+      TRUSTED_PROXY_HOPS: 0
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
     ports:

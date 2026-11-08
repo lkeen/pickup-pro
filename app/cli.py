@@ -1,7 +1,7 @@
 """Flask CLI commands.
 
-`flask seed` exists so that a fresh clone can reach a working, populated app in
-one command. An empty database makes a project look broken.
+`flask seed` exists so a fresh clone reaches a working, populated app in one
+command; an empty database makes the project look broken.
 """
 
 import random
@@ -17,8 +17,7 @@ from app.timeutils import utcnow
 
 bp = Blueprint("cli", __name__, cli_group=None)
 
-# Real courts in Athens, GA, so the map opens somewhere recognisable rather than
-# in the Atlantic.
+# Real courts, so the map opens somewhere recognisable.
 COURTS = [
     ("Legion Field", "195 Sanford Dr, Athens, GA", 33.9482, -83.3745),
     ("Bishop Park", "705 Sunset Dr, Athens, GA", 33.9743, -83.3960),
@@ -40,7 +39,7 @@ SEED_PASSWORD = "pickup-demo-password"
 @click.option("--force", is_flag=True, help="Wipe existing data first.")
 def seed(force):
     """Populate the database with a small, plausible dataset."""
-    if User.query.count() and not force:
+    if db.session.scalar(db.select(db.func.count(User.id))) and not force:
         click.echo("Database already has data. Re-run with --force to replace it.")
         return
 
@@ -50,7 +49,7 @@ def seed(force):
         db.session.commit()
         click.echo("Cleared existing data.")
 
-    rng = random.Random(20260826)  # deterministic, so the demo looks the same each time
+    rng = random.Random(20260826)  # deterministic: the demo looks the same every time
 
     users = []
     for name in PLAYERS:
@@ -69,8 +68,7 @@ def seed(force):
 
     now = utcnow()
     games = []
-    # A mix of past games (which can have stats) and upcoming ones (which show
-    # up in search).
+    # Past games can have stats; upcoming ones show up in search.
     for offset in (-12, -9, -6, -4, -2, -1, 1, 2, 3, 5, 8, 11):
         court = rng.choice(courts)
         host = rng.choice(users)
@@ -107,9 +105,11 @@ def seed(force):
             )
         for rater in roster:
             for target in rng.sample([p for p in roster if p != rater], min(2, len(roster) - 1)):
-                exists = PlayerRating.query.filter_by(
-                    game_id=game.id, from_user_id=rater.id, to_user_id=target.id
-                ).first()
+                exists = db.session.scalar(
+                    db.select(PlayerRating.id).filter_by(
+                        game_id=game.id, from_user_id=rater.id, to_user_id=target.id
+                    )
+                )
                 if not exists:
                     db.session.add(
                         PlayerRating(

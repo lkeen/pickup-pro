@@ -35,6 +35,23 @@ INDEXES = [
 ]
 
 
+def _drop_if_invalid(name):
+    """Clear the wreckage of a CONCURRENTLY build that failed.
+
+    A failed concurrent build leaves an INVALID index behind. The planner
+    ignores it, IF NOT EXISTS will not replace it, and the migration that
+    "created" it reports success -- so the table ends up with no usable index
+    and nothing says so.
+    """
+    invalid = op.get_bind().exec_driver_sql(
+        "SELECT 1 FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid "
+        "WHERE c.relname = %s AND NOT i.indisvalid",
+        (name,),
+    ).scalar()
+    if invalid:
+        op.execute(f'DROP INDEX IF EXISTS {name}')
+
+
 def upgrade():
     # CONCURRENTLY for the same reason as the GiST index: a plain CREATE INDEX
     # takes a SHARE lock and blocks writes to the table for its duration. That
@@ -42,6 +59,7 @@ def upgrade():
     # populated one.
     with op.get_context().autocommit_block():
         for name, table, columns in INDEXES:
+            _drop_if_invalid(name)
             op.execute(
                 f'CREATE INDEX CONCURRENTLY IF NOT EXISTS {name} ON {table} ({columns})'
             )

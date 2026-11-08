@@ -19,11 +19,12 @@ bp = Blueprint("profiles", __name__, url_prefix="/users")
 @login_required
 def detail(user_id):
     user = db.get_or_404(User, user_id)
+    games = recent_games(user_id)
     return render_template(
         "user_profile.html",
         user=user,
         summary=profile_summary(user_id),
-        recent_games=recent_games(user_id),
+        recent_games=games,
         recent_ratings=recent_ratings(user_id),
-        chart_data=chart_data(user_id),
+        chart_data=chart_data(user_id, games),
     )

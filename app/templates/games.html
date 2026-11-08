@@ -34,7 +34,7 @@
 </div>
 
 {% if games %}
-<div class="card card--flush" style="margin-top:1rem">
+<div class="card card--flush u-mt-4">
   <div class="table-wrap">
     <table>
       <thead>
@@ -78,10 +78,22 @@
     </table>
   </div>
 </div>
+
+{% if pagination.pages > 1 %}
+<nav class="pager" aria-label="Pagination">
+  {% if pagination.has_prev %}
+    <a class="btn btn--small" href="{{ url_for('games.index', page=pagination.prev_num, **filters) }}">Previous</a>
+  {% else %}<span></span>{% endif %}
+  <span class="pager__status">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+  {% if pagination.has_next %}
+    <a class="btn btn--small" href="{{ url_for('games.index', page=pagination.next_num, **filters) }}">Next</a>
+  {% else %}<span></span>{% endif %}
+</nav>
+{% endif %}
 {% else %}
-<div class="card empty" style="margin-top:1rem">
-  <h3>No games yet</h3>
-  <p>Nothing matches those filters.</p>
+<div class="card empty u-mt-4">
+  <h3>No games to show</h3>
+  <p>Nothing upcoming matches those filters. Pick a date to look further back.</p>
   <a href="{{ url_for('games.create') }}" class="btn btn--primary">Host the first one</a>
 </div>
 {% endif %}

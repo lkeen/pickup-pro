@@ -7,10 +7,10 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
 
-db          = SQLAlchemy()     # ORM
-migrate     = Migrate()        # Alembic migrations
-login_mgr   = LoginManager()   # User session management
-csrf        = CSRFProtect()   # CSRF tokens on every state-changing request
-limiter     = Limiter(key_func=get_remote_address)  # brute-force throttling
-oauth       = OAuth()          # third-party sign-in (Google)
-cache       = Cache()          # response/query cache (Redis)
+db = SQLAlchemy()
+migrate = Migrate()
+login_mgr = LoginManager()
+csrf = CSRFProtect()
+limiter = Limiter(key_func=get_remote_address)
+oauth = OAuth()
+cache = Cache()

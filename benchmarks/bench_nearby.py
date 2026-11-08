@@ -23,7 +23,12 @@ from app import create_app  # noqa: E402
 from app.extensions import db  # noqa: E402
 from app.models import Court, Game  # noqa: E402
 from app.services import caching  # noqa: E402
-from app.services.geo import nearby_cache_key, nearby_cache_tags, nearby_games  # noqa: E402
+from app.services.geo import (  # noqa: E402
+    MAX_RESULTS,
+    nearby_cache_key,
+    nearby_cache_tags,
+    nearby_games,
+)
 from app.utils import haversine_distance  # noqa: E402
 
 # Athens, GA -- the middle of the seeded region.
@@ -137,6 +142,12 @@ def main():
         baseline = python_loop()
         indexed = gist_query()
         cached = cached_query()
+        if len(indexed) >= MAX_RESULTS:
+            sys.exit(
+                f"The indexed search hit its {MAX_RESULTS}-row cap, so the three "
+                f"implementations are no longer answering the same question. Use "
+                f"fewer games, or a smaller radius, to compare them."
+            )
         if not (baseline == indexed == cached):
             sys.exit(
                 f"Implementations disagree: python={len(baseline)} "

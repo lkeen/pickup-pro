@@ -1,14 +1,11 @@
 """Time handling.
 
-Everything is stored as TIMESTAMPTZ and handled in UTC internally. The only
-place a local time exists is at the edges: a form submits a wall-clock time
-("Saturday 6pm") and a page renders one back.
+Everything is stored as TIMESTAMPTZ and handled in UTC. Local time exists only
+at the edges: a form submits a wall-clock time and a page renders one back.
 
 A game's time is wall-clock at the court, so interpreting it needs a timezone.
-Per-court timezones would be the fully correct model -- derivable from the
-coordinates now that PostGIS is here -- but this app serves one metro area at a
-time, so a single configured zone is the honest simplification. APP_TIMEZONE is
-the knob.
+Per-court zones would be the fully correct model, but this app serves one metro
+area at a time, so APP_TIMEZONE is a single configured zone.
 """
 
 from datetime import UTC, datetime
@@ -18,12 +15,7 @@ from flask import current_app
 
 
 def utcnow():
-    """Timezone-aware current time.
-
-    datetime.now() returns naive *local* time, which then gets compared against
-    values that mean something else. datetime.utcnow() is worse: it returns a
-    naive datetime holding UTC, so it looks local and is not.
-    """
+    """Timezone-aware current time."""
     return datetime.now(UTC)
 
 

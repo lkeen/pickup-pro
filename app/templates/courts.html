@@ -19,7 +19,7 @@
 </div>
 
 <div class="card">
-  <div class="form-row" style="margin-bottom:0.75rem">
+  <div class="form-row u-mb-3">
     <div class="form-row__action">
       <button type="button" id="nearby-search" class="btn btn--primary">Find games near me</button>
     </div>
@@ -31,21 +31,21 @@
 
   <div id="court-map" class="map-canvas"></div>
 
-  <p id="map-status" class="small muted" style="margin:0.75rem 0 0"></p>
-  <div class="map-legend muted" style="margin-top:0.5rem">
-    <span><i class="map-pin--court" style="background:var(--color-text-muted)"></i> Court</span>
-    <span><i class="map-pin--game" style="background:var(--color-accent)"></i> Has a game</span>
-    <span><i class="map-pin--you" style="background:var(--color-success)"></i> You</span>
+  <p id="map-status" class="small muted u-mt-3"></p>
+  <div class="map-legend muted u-mt-2">
+    <span><i class="map-pin--court"></i> Court</span>
+    <span><i class="map-pin--game"></i> Has a game</span>
+    <span><i class="map-pin--you"></i> You</span>
   </div>
-  <p class="small muted" style="margin-top:0.5rem">
+  <p class="small muted u-mt-2">
     Click anywhere on the map to search from that point instead.
   </p>
 
-  <div id="nearby-results" style="margin-top:1rem"></div>
+  <div id="nearby-results" class="u-mt-4"></div>
 </div>
 
 {% if courts %}
-<div class="card card--flush" style="margin-top:1rem">
+<div class="card card--flush u-mt-4">
   <div class="table-wrap">
     <table>
       <thead><tr><th>Name</th><th>Address</th><th></th></tr></thead>

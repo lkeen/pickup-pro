@@ -429,3 +429,34 @@ a:hover { color: var(--color-accent-hover); }
 /* --- charts --- */
 
 .chart-box { position: relative; height: 260px; }
+
+/* --- pagination --- */
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.pager__status { color: var(--color-text-muted); font-size: 0.875rem; }
+
+/* --- utilities ---
+   A deliberately short list. These exist so no template carries a style
+   attribute, which is what lets the Content-Security-Policy drop
+   'unsafe-inline' for styles as well as scripts. */
+
+.u-m-0 { margin: 0; }
+.u-mt-0 { margin-top: 0; }
+.u-mt-2 { margin-top: var(--space-2); }
+.u-mt-3 { margin: var(--space-3) 0 0; }
+.u-mt-4 { margin-top: var(--space-4); }
+.u-mt-5 { margin-top: var(--space-5); }
+.u-mb-3 { margin-bottom: var(--space-3); }
+
+/* A whole card behaving as one link. */
+.card--link { text-decoration: none; color: inherit; display: block; }
+.card--link:hover { border-color: var(--color-accent); }
+
+/* Restores the card's own padding for a heading inside a flush card. */
+.card__head { padding: var(--space-4) 1.25rem 0; }

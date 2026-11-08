@@ -1,9 +1,7 @@
 """Form definitions.
 
-Every form in the app is a FlaskForm, which does two jobs at once: it renders a
-CSRF token and it moves input validation off the view functions, where it was
-previously a hand-rolled mix of `if not all([...])` checks and bare
-`float()`/`int()` calls in try blocks.
+Every form is a FlaskForm, which renders a CSRF token and keeps input
+validation out of the view functions.
 """
 
 from flask_wtf import FlaskForm
@@ -25,9 +23,6 @@ from wtforms.validators import (
     Regexp,
 )
 
-# Latitude/longitude bounds. Worth stating explicitly: the previous nearby-search
-# guard treated 0 as "missing", which silently rejected the equator and the
-# prime meridian.
 LAT_RANGE = NumberRange(min=-90, max=90, message="Latitude must be between -90 and 90.")
 LNG_RANGE = NumberRange(min=-180, max=180, message="Longitude must be between -180 and 180.")
 
@@ -35,10 +30,10 @@ MIN_PASSWORD_LENGTH = 10
 
 
 class ConfirmForm(FlaskForm):
-    """A form with no fields, used purely to carry a CSRF token.
+    """A fieldless form, used purely to carry a CSRF token.
 
     State-changing actions that need no input -- join, leave, logout -- still
-    have to be POSTs with a token, or they can be triggered from another site.
+    have to be POSTs with a token, or another site can trigger them.
     """
 
 
@@ -78,7 +73,8 @@ class RegisterForm(FlaskForm):
 class CourtForm(FlaskForm):
     name = StringField("Court name", validators=[DataRequired(), Length(max=64)])
     address = StringField("Address", validators=[DataRequired(), Length(max=120)])
-    # InputRequired rather than DataRequired: DataRequired treats 0.0 as absent.
+    # InputRequired rather than DataRequired: DataRequired treats 0.0 as absent,
+    # and the equator is a real place.
     lat = FloatField("Latitude", validators=[InputRequired(), LAT_RANGE])
     lng = FloatField("Longitude", validators=[InputRequired(), LNG_RANGE])
 
@@ -93,7 +89,10 @@ class GameForm(FlaskForm):
     )
 
     def set_court_choices(self, courts):
-        self.court_id.choices = [(court.id, f"{court.name} - {court.address}") for court in courts]
+        """Populate the court options, which is also what validates the id."""
+        self.court_id.choices = [
+            (court["id"], f"{court['name']} - {court['address']}") for court in courts
+        ]
         return self
 
 

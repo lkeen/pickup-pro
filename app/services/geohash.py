@@ -2,31 +2,26 @@
 
 Two different jobs, deliberately kept apart.
 
-**Cache keys** use a geohash. Raw float coordinates from a browser's geolocation
-never repeat, so keying on them gives a hit rate of approximately zero.
-Quantising to a geohash cell means two searches from the same street corner ask
-the same question. The cost is that the search centre moves by up to half a cell,
-which for the precision used here is tens of metres -- immaterial for "games near
-me", and stated rather than hidden.
+Cache keys use a geohash, because raw float coordinates from a browser never
+repeat and keying on them gives a hit rate of roughly zero. The cost is that the
+search centre moves by up to half a cell -- tens of metres at this precision.
 
-**Invalidation tags** use a plain latitude/longitude grid instead. Tag coverage
-has to be exact: a cell missed when tagging is an entry that never gets
-invalidated and goes stale until its TTL expires. Enumerating grid cells across
-a bounding box is obviously exact. Walking geohash neighbours is fiddly and easy
-to get subtly wrong at cell and meridian boundaries, and being clever there buys
-nothing.
+Invalidation tags use a plain latitude/longitude grid instead, because tag
+coverage has to be exact: a cell missed when tagging is an entry that never gets
+invalidated. Enumerating grid cells across a bounding box is obviously exact,
+whereas walking geohash neighbours is easy to get subtly wrong at cell and
+meridian boundaries.
 """
 
 import math
 
 _BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
 
-# ~150 m x 150 m. Fine enough that quantising does not move a search
-# meaningfully, coarse enough that repeated searches from one place collide.
+# ~150 m cells: fine enough that quantising does not move a search
+# meaningfully, coarse enough that searches from one place collide.
 DEFAULT_PRECISION = 7
 
-# ~55 km at the equator. One tag per cell; a court changing invalidates its own
-# cell only.
+# ~55 km cells. One tag each, so a court changing invalidates its own cell only.
 TAG_CELL_DEGREES = 0.5
 
 
@@ -78,11 +73,9 @@ def cell_for(lat, lng):
 def cells_covering(lat, lng, radius_km):
     """Every tag cell a search from (lat, lng) could draw results from.
 
-    Over-covering is harmless -- an extra tag means an extra invalidation.
-    Under-covering is a correctness bug, so the bounding box is deliberately
-    generous: latitude degrees are treated as 111 km, and the longitude span is
-    computed at whichever edge of the box is nearest a pole, where degrees are
-    shortest and therefore span the most cells.
+    Over-covering is harmless -- an extra tag means an extra invalidation --
+    but under-covering is a correctness bug, so the bounding box is deliberately
+    generous.
     """
     lat_delta = radius_km / 111.0
 

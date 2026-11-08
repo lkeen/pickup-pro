@@ -118,6 +118,58 @@ The first migration this project shipped could not be reversed at all:
 `create_foreign_key(None, ...)` then `drop_constraint(None, ...)`, which Alembic
 cannot compile. CI would have caught it on day one.
 
+One failure mode worth calling out, because it bit this repository: a
+`CREATE INDEX CONCURRENTLY` that fails leaves an **invalid** index behind. The
+planner ignores it, `IF NOT EXISTS` will not replace it, and the migration that
+"created" it is still recorded as applied — so the table has no usable index and
+nothing says so. The development database here had exactly that: `ix_courts_geog`
+recorded as created and absent from `pg_indexes`. Both concurrent-index
+migrations now clear an invalid leftover before building, and `flask db check`
+in CI catches the divergence.
+
+### 4. Security posture
+
+| | |
+|---|---|
+| **Sessions** | Signed with a key production *refuses to boot* without, `HttpOnly`, `SameSite=Lax`, `Secure` in production, 7-day lifetime, cleared and rotated on login so a fixed pre-login cookie cannot inherit the session. |
+| **CSRF** | `CSRFProtect` app-wide, not per-form. Actions that take no input — join, leave, logout — still POST a token. |
+| **Authorization** | Decorators in `app/security.py`, because the app got this wrong: see the bug table. |
+| **Headers** | A Content-Security-Policy with **no `unsafe-inline`**, plus `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and HSTS in production. |
+| **Rate limiting** | Redis-backed, so it counts correctly across workers. Tight on auth, a default ceiling everywhere else. |
+| **Proxy awareness** | `X-Forwarded-*` is trusted for exactly as many hops as are configured, and ignored at zero. |
+| **Errors** | The app's own pages, JSON under `/api`. No Werkzeug stack traces, no server banner. |
+
+The strict CSP is the part that took actual work. `script-src 'self'` and
+`style-src 'self'` with no `unsafe-inline` mean no template may carry an
+executable inline `<script>`, a `style` attribute, or an `onclick`. So the stat
+and rating modals read `data-*` attributes through a delegated listener, the
+leaderboard's filter uses `data-autosubmit`, and 27 inline `style` attributes
+became nine classes. The profile's chart data rides in a
+`<script type="application/json">` data block, which the browser never executes
+and CSP therefore never evaluates — the standard way to hand data to a script
+without `unsafe-inline`. A test walks every template and fails on a
+reintroduced attribute, because one `style=` would force `unsafe-inline` back
+into the header for every page.
+
+### 5. Holding up with real traffic
+
+Correct-but-unbounded is the failure mode that only shows up once a project has
+users:
+
+- **The game listing** had no `LIMIT`. Ordered by time with no lower bound, page
+  one was the oldest game ever played and the query grew without limit. Now
+  paginated, upcoming-only by default, filters carried through the pager.
+- **Nearby search** had no cap. A 200 km radius over a dense city would return,
+  cache, and serialize however many rows existed. Capped at 100.
+- **The connection pool** is sized explicitly, because the real ceiling is
+  `(pool_size + max_overflow) x workers` against the server's `max_connections`.
+  `pool_pre_ping` recycles connections the database closed underneath us.
+- **Tag invalidation** deletes a tag's entries in one pipelined round trip
+  rather than one per key; a busy grid cell can carry hundreds.
+- **Every query goes through an index**, and an N+1 regression test asserts the
+  listing's query count does not grow with the number of rows — rather than
+  pinning a number that would just need updating.
+
 ---
 
 ## Bugs this fixed
@@ -136,6 +188,13 @@ Every one of these was in the repository, and each has a regression test.
 | **Naive timestamps** | Every column `TIMESTAMP WITHOUT TIME ZONE`, written with `datetime.now()` — local time, from a zone nobody recorded. |
 | **XSS-adjacent escaping** | Usernames and comments interpolated into `onclick="..."`. Jinja escapes for HTML, not for JavaScript string context. |
 | **`requirements.txt` was UTF-16** | `pip install -r` could not parse it. It also pinned `PyMySQL` for a PostgreSQL project. |
+| **`?court_id=abc` was a 500** | The query string went straight to the ORM and reached PostgreSQL as `court_id = 'abc'`. Verified against the running app before and after. |
+| **A duplicate court was a 500** | `uq_courts_name_location` had no handler in front of it, so the second submission surfaced an `IntegrityError` as a stack trace. |
+| **Lost registration races were 500s** | Check-then-insert on username and email; the loser of the race got an unhandled constraint violation. |
+| **A missing index, recorded as created** | A failed `CREATE INDEX CONCURRENTLY` left no index and an applied migration. `ix_courts_geog` was absent from the development database for exactly that reason. |
+| **Dead session config** | `PERMANENT_SESSION_LIFETIME` was set to 7 days and had no effect: a non-permanent Flask session cookie carries no expiry at all. |
+| **Username enumeration by timing** | A login for an unknown user skipped password verification and returned measurably faster. Now a dummy hash is always compared. |
+| **Debugger on every interface** | `manage.py` ran `debug=True` bound to `0.0.0.0`; the Werkzeug debugger evaluates code sent to it. |
 
 ---
 
@@ -151,7 +210,7 @@ Flask-Limiter, gunicorn.
 no framework, no build step), Leaflet, Chart.js. Both libraries are vendored, so
 the app works offline and depends on no CDN staying up.
 
-**Testing** — 250+ pytest tests against real PostgreSQL and Redis. Not SQLite:
+**Testing** — 280+ pytest tests against real PostgreSQL and Redis. Not SQLite:
 the queries this project exists to demonstrate have no SQLite equivalent.
 GitHub Actions runs lint, migrations up, drift check, migrations *down*, then
 the suite.
@@ -161,6 +220,7 @@ app/
   blueprints/   auth · oauth · courts · games · stats · profiles · leaderboard · api
   services/     geo (spatial) · caching · geohash · aggregates
   security.py   @require_roster · @require_target_on_roster · @forbid_self
+  logging.py    structlog, request ids, timing
   static/       css/main.css · js/ · vendor/
 benchmarks/     bench_nearby.py
 migrations/     10 revisions, all reversible
@@ -216,5 +276,10 @@ Stated rather than hidden.
   metres. That is the trade for a cache that hits.
 - **Email addresses are unverified** for password sign-ups; `email_verified` is
   only ever true for an address an identity provider vouched for.
+- **No stampede protection.** On a cache miss, concurrent requests all compute
+  the same value. For the leaderboard that is a few duplicated group-bys, not an
+  outage, so a lock would be complexity bought on speculation.
+- **Rate limits are per IP.** Fine against casual brute force, weak against a
+  distributed one. Per-account lockout is the next thing to add.
 - **Not deployed.** `fly.toml` and the steps are in the repository; running them
   needs an account.

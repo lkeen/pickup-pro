@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} — Pickup Pro{% endblock %}
+
+{% block body %}
+<div class="card empty">
+  <h1>{{ code }}</h1>
+  <p class="lede">{{ message }}</p>
+  <a href="{{ url_for('auth.home') }}" class="btn btn--primary">Back to the start</a>
+</div>
+{% endblock %}

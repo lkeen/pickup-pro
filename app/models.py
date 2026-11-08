@@ -13,13 +13,11 @@ class User(UserMixin, db.Model):
     # Nullable: an account created through Google has no password at all.
     password_hash = db.Column(db.String(255), unique = False, nullable = True)
     email = db.Column(db.String(254), unique = True, nullable = False)
-    # Only ever true for an address an identity provider vouched for. Passwords
-    # sign-ups are unverified until email confirmation exists.
     email_verified = db.Column(
         db.Boolean, nullable = False, default = False, server_default = db.text("false")
     )
-    # The provider's stable subject identifier. Not the email: people change
-    # their email address, and the subject is what actually identifies them.
+    # The provider's stable subject identifier, not the email: people change
+    # their email address and the subject is what actually identifies them.
     oauth_provider = db.Column(db.String(32))
     oauth_sub = db.Column(db.String(255))
     created_at = db.Column(db.DateTime(timezone = True), default = utcnow)
@@ -30,9 +28,8 @@ class User(UserMixin, db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('oauth_provider', 'oauth_sub', name='unique_oauth_identity'),
-        # Every account must have at least one way to authenticate. Without this
-        # a bug could leave a row that nobody -- including its owner -- can log
-        # into, and nothing would notice.
+        # Every account must keep at least one way to authenticate, or a bug
+        # could leave a row nobody can log into and nothing would notice.
         db.CheckConstraint(
             'password_hash IS NOT NULL '
             'OR (oauth_provider IS NOT NULL AND oauth_sub IS NOT NULL)',
@@ -48,7 +45,6 @@ class User(UserMixin, db.Model):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        # An OAuth-only account has no hash; comparing against None raises.
         if not self.password_hash:
             return False
         return check_password_hash(self.password_hash, password)
@@ -58,21 +54,15 @@ class Court(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     name = db.Column(db.String(64), nullable = False)
     address = db.Column(db.String(120), nullable = False)
-    # lat/lng stay the source of truth: they are what a form submits and what
-    # gets displayed.
     lat = db.Column(db.Float, nullable = False)
     lng = db.Column(db.Float, nullable = False)
-    # Derived from them by PostgreSQL, never written by the application. A
-    # generated column cannot drift from lat/lng the way a trigger-maintained or
-    # application-maintained one can, and it holds for every write path --
-    # including bulk inserts that bypass the ORM entirely.
-    #
-    # geography, not geometry: distances come out in metres on the spheroid, so
-    # ST_DWithin takes a real radius rather than degrees.
+    # Derived by PostgreSQL from lat/lng, never written by the application: a
+    # generated column cannot drift the way a trigger-maintained one can, and it
+    # holds for write paths that bypass the ORM. geography rather than geometry
+    # so distances come out in metres on the spheroid.
     #
     # spatial_index=False because GeoAlchemy2 would otherwise create the GiST
-    # index through a DDL event; it is created explicitly in a migration so it
-    # can be built CONCURRENTLY.
+    # index through a DDL event; a migration creates it CONCURRENTLY instead.
     geog = db.Column(
         Geography(geometry_type = "POINT", srid = 4326, spatial_index = False),
         db.Computed("ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography", persisted = True),
@@ -83,17 +73,14 @@ class Court(db.Model):
 
     games = db.relationship('Game', backref='court', lazy=True)
 
+    # Created in migrations, declared here so `flask db check` sees them and
+    # autogenerate does not propose dropping them.
     __table_args__ = (
-        # Declared here so `flask db check` can see it, but created in a
-        # migration rather than by metadata: it is built CONCURRENTLY, which
-        # cannot happen inside a transaction.
         db.Index('ix_courts_geog', 'geog', postgresql_using='gist'),
         db.Index('ix_courts_created_by', 'created_by'),
-        # Stops the same court being entered twice, which would split its games
-        # across two rows nobody sees together. Rounded to ~11 m because two
-        # people typing coordinates for one court will not agree to the last
-        # float digit. Created in a migration; declared here so autogenerate
-        # does not propose dropping it.
+        # Rounded to ~11 m: two people entering one court will not agree to the
+        # last float digit, and duplicates split a court's games across rows
+        # nobody sees together.
         db.Index(
             'uq_courts_name_location',
             db.text('lower(name)'),
@@ -108,8 +95,8 @@ class Game(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     court_id = db.Column(db.Integer, db.ForeignKey("courts.id"), nullable = False)
     host_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable = False)
-    # Stored as an instant in UTC. The wall-clock time a host typed is
-    # interpreted in APP_TIMEZONE on the way in and rendered back in it.
+    # An instant in UTC. The wall-clock time a host typed is interpreted in
+    # APP_TIMEZONE on the way in and rendered back in it.
     time = db.Column(db.DateTime(timezone = True), nullable = False)
     max_players = db.Column(db.Integer, default = 10)
     created_at = db.Column(db.DateTime(timezone = True), default = utcnow)
@@ -119,11 +106,9 @@ class Game(db.Model):
     __table_args__ = (
         db.Index('ix_games_court_id', 'court_id'),
         db.Index('ix_games_host_id', 'host_id'),
-        # Every listing filters or orders on time. The nearby-search plan showed
-        # a sequential scan over 75,000 games because of its absence.
         db.Index('ix_games_time', 'time'),
-        # Serves the common "games at this court on this day" filter with one
-        # index rather than two lookups intersected.
+        # Serves "games at this court on this day" with one index rather than
+        # two lookups intersected.
         db.Index('ix_games_court_id_time', 'court_id', 'time'),
     )
 
@@ -146,8 +131,8 @@ class GamePlayer(db.Model):
     joined_at = db.Column(db.DateTime(timezone = True), default = utcnow)
 
     __table_args__ = (
-        # game_id already leads the composite primary key; user_id does not, so
-        # "which games is this user in" has no index to use.
+        # game_id leads the composite primary key; user_id does not, so "which
+        # games is this user in" would have no index to use.
         db.Index('ix_game_players_user_id', 'user_id'),
     )
 

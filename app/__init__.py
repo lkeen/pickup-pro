@@ -1,25 +1,18 @@
-"""Application factory.
+"""Application factory. Routes live in ``app.blueprints``."""
 
-Routes live in ``app.blueprints``; this module only wires the app together.
-"""
-
-from dotenv import load_dotenv
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-# Environment must be loaded before config is imported: config reads os.getenv
-# at class-definition time.
-load_dotenv()
-
-from app.extensions import cache, csrf, db, limiter, login_mgr, migrate, oauth  # noqa: E402
-from config import get_config  # noqa: E402
+from app.extensions import cache, csrf, db, limiter, login_mgr, migrate, oauth
+from config import get_config
 
 
 def create_app(config_name=None):
     app = Flask(__name__)
 
-    # Resolve and validate configuration before anything else touches it, so a
-    # missing DATABASE_URL or a placeholder SECRET_KEY fails at boot rather than
-    # on the first request that happens to need it.
+    # Resolved and validated before anything else touches it, so a missing
+    # DATABASE_URL or a placeholder SECRET_KEY fails at boot rather than on the
+    # first request that happens to need it.
     config_class = get_config(config_name)
     config_class.validate()
     app.config.from_object(config_class)
@@ -27,20 +20,37 @@ def create_app(config_name=None):
     from app.logging import configure as configure_logging
 
     configure_logging(app)
+    trust_proxy_headers(app)
     register_extensions(app)
     register_template_helpers(app)
     register_blueprints(app)
     register_health_check(app)
+    register_security_headers(app)
+    register_error_handlers(app)
 
     return app
+
+
+def trust_proxy_headers(app):
+    """Read the client's real address and scheme from X-Forwarded-* headers.
+
+    Only as many hops as are configured are trusted; the rest of each header is
+    discarded. Without this the app sees the proxy's address for every request,
+    which keys the whole internet into one rate-limit bucket and makes
+    ``url_for(_external=True)`` build http:// URLs behind a TLS terminator --
+    the OAuth redirect URI among them.
+    """
+    hops = app.config.get("TRUSTED_PROXY_HOPS", 0)
+    if hops > 0:
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app, x_for=hops, x_proto=hops, x_host=hops, x_prefix=hops
+        )
 
 
 def register_extensions(app):
     db.init_app(app)
     migrate.init_app(app, db)
     login_mgr.init_app(app)
-    # Protects every POST/PUT/PATCH/DELETE app-wide, not only routes that
-    # happen to remember to validate a form.
     csrf.init_app(app)
     cache.init_app(app)
     limiter.init_app(app)
@@ -48,8 +58,6 @@ def register_extensions(app):
 
     from app.blueprints.oauth import register_google
 
-    # Absent Google credentials is a normal state for a fresh clone: the
-    # sign-in button simply does not render.
     app.config["GOOGLE_OAUTH_READY"] = register_google(app)
 
     # Imported for the side effect of registering the models with SQLAlchemy's
@@ -58,27 +66,24 @@ def register_extensions(app):
 
     @login_mgr.user_loader
     def load_user(user_id: str):
-        # Flask-Login passes a string; convert to int for PK lookup
-        return db.session.get(User, int(user_id))
+        try:
+            return db.session.get(User, int(user_id))
+        except ValueError:
+            return None
 
-    # Where @login_required sends anonymous users.
     login_mgr.login_view = "auth.home"
-    # "strong" ties the session to a hash of the client's IP and user agent
-    # and drops it when they change, so a lifted cookie is less portable.
+    # Ties the session to a hash of the client's address and user agent, so a
+    # lifted cookie is less portable.
     login_mgr.session_protection = "strong"
 
 
 def register_template_helpers(app):
-    """Make a CSRF field available to any template.
-
-    The nav renders a logout form on every page, so requiring each view to pass
-    a form object down would be a rule everyone forgets exactly once.
-    """
     from flask_wtf.csrf import generate_csrf
     from markupsafe import Markup
 
     @app.template_global()
     def csrf_field():
+        """A CSRF input for templates with no form object of their own."""
         return Markup(
             f'<input type="hidden" name="csrf_token" value="{generate_csrf()}">'
         )
@@ -87,11 +92,7 @@ def register_template_helpers(app):
 
     @app.template_filter("localtime")
     def localtime(value, fmt="%a %d %b, %H:%M"):
-        """Render a stored UTC instant as wall-clock in APP_TIMEZONE.
-
-        Templates were calling .strftime() directly on the column, which printed
-        UTC and called it local.
-        """
+        """Render a stored UTC instant as wall-clock in APP_TIMEZONE."""
         if value is None:
             return ""
         return to_local(value).strftime(fmt)
@@ -110,14 +111,15 @@ def register_blueprints(app):
 
 
 def register_health_check(app):
-    """A liveness endpoint for the container runtime and the load balancer.
+    """Liveness for the container runtime and the load balancer.
 
-    Checks the database rather than only that Python is running: a process that
-    cannot reach its database should not be sent traffic.
+    Checks the database, not just that Python is running: a process that cannot
+    reach its database should not be sent traffic.
     """
     from sqlalchemy import text
 
     @app.route("/healthz")
+    @limiter.exempt
     def healthz():
         try:
             db.session.execute(text("SELECT 1"))
@@ -125,3 +127,77 @@ def register_health_check(app):
             app.logger.exception("health check failed")
             return {"status": "unhealthy"}, 503
         return {"status": "ok"}
+
+
+# Tiles come from OpenStreetMap; everything else is served from this origin.
+# No 'unsafe-inline' anywhere, which is only possible because no template
+# carries an inline script, style attribute or event handler.
+CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self'; "
+    "img-src 'self' data: https://*.tile.openstreetmap.org; "
+    "connect-src 'self'; "
+    "font-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'none'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
+SECURITY_HEADERS = {
+    "Content-Security-Policy": CSP,
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    # The map asks for the visitor's location; nothing else needs a device.
+    "Permissions-Policy": "geolocation=(self), camera=(), microphone=(), payment=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
+
+
+def register_security_headers(app):
+    hsts_seconds = app.config.get("HSTS_SECONDS")
+
+    @app.after_request
+    def _set_security_headers(response):
+        for header, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(header, value)
+        if hsts_seconds:
+            response.headers.setdefault(
+                "Strict-Transport-Security", f"max-age={hsts_seconds}; includeSubDomains"
+            )
+        return response
+
+
+def register_error_handlers(app):
+    """Serve the app's own error pages, and JSON under /api.
+
+    Werkzeug's default pages leak the server identity and look nothing like the
+    app; a JSON client receiving an HTML error body cannot parse the reason.
+    """
+    from flask import jsonify, render_template, request
+    from werkzeug.exceptions import HTTPException
+
+    def wants_json():
+        return request.path.startswith("/api/") or request.accept_mimetypes.best == (
+            "application/json"
+        )
+
+    @app.errorhandler(HTTPException)
+    def _http_error(error):
+        if wants_json():
+            return jsonify({"error": error.description, "status": error.code}), error.code
+        return (
+            render_template("error.html", code=error.code, message=error.description),
+            error.code,
+        )
+
+    @app.errorhandler(Exception)
+    def _unexpected_error(error):
+        app.logger.exception("unhandled exception", exc_info=error)
+        db.session.rollback()
+        message = "Something went wrong on our end."
+        if wants_json():
+            return jsonify({"error": message, "status": 500}), 500
+        return render_template("error.html", code=500, message=message), 500

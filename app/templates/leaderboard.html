@@ -1,11 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Leaderboard — Pickup Pro{% endblock %}
 
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/autosubmit.js') }}" defer></script>
+{% endblock %}
+
 {% block body %}
 <div class="page-header">
   <h1>Leaderboard</h1>
   <form method="GET" class="page-header__actions">
-    <select name="metric" onchange="this.form.submit()" aria-label="Metric">
+    <select name="metric" data-autosubmit aria-label="Metric">
       {% for key, label in metrics.items() %}
         <option value="{{ key }}" {% if key == metric %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
@@ -16,7 +20,7 @@
 
 <div class="grid grid--2">
   <div class="card card--flush">
-    <div style="padding:1rem 1.25rem 0"><h3>{{ metric_label }}</h3></div>
+    <div class="card__head"><h3>{{ metric_label }}</h3></div>
     {% if rows %}
     <div class="table-wrap">
       <table>
@@ -39,7 +43,7 @@
   </div>
 
   <div class="card card--flush">
-    <div style="padding:1rem 1.25rem 0"><h3>Highest rated</h3></div>
+    <div class="card__head"><h3>Highest rated</h3></div>
     {% if rated %}
     <div class="table-wrap">
       <table>

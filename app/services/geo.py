@@ -1,15 +1,15 @@
 """Spatial search.
 
 The previous implementation loaded every future game and its court into Python,
-computed a Haversine distance per row in a `for` loop, and discarded the ones
-outside the radius. That is a sequential scan plus O(n) work in the application
-for a question the database can answer with an index.
+computed a Haversine distance per row in a loop, and threw away the ones outside
+the radius -- a sequential scan plus O(n) application work for a question the
+database can answer with an index.
 
 ST_DWithin on a GiST-indexed geography column is a two-stage operation, and both
-stages are visible in the query plan: the index gives a bounding-box prefilter
-(the && operator over the geography's cached bounding box), then PostGIS refines
-the survivors with an exact spheroid distance. Nothing that fails the bounding
-box is ever measured.
+stages show up in the query plan: the index gives a bounding-box prefilter (the
+&& operator over the geography's cached bounding box), then PostGIS refines the
+survivors with an exact spheroid distance. Nothing that fails the bounding box
+is ever measured.
 """
 
 from datetime import datetime, timedelta
@@ -24,13 +24,16 @@ from app.services import caching
 from app.services.geohash import cell_for, cells_covering, encode
 from app.timeutils import to_utc, utcnow
 
-# Bounds for user-supplied search parameters.
 MIN_LAT, MAX_LAT = -90.0, 90.0
 MIN_LNG, MAX_LNG = -180.0, 180.0
 MAX_RADIUS_KM = 200.0
 DEFAULT_RADIUS_KM = 10.0
 
 METRES_PER_KM = 1000.0
+
+# A wide radius over a dense city would otherwise return -- and cache, and
+# serialize to JSON -- an unbounded number of rows. Nobody scrolls past this.
+MAX_RESULTS = 100
 
 
 class InvalidSearch(ValueError):
@@ -42,9 +45,9 @@ def validate_search(lat, lng, radius_km, date_str=None):
 
     Returns (lat, lng, radius_km, date) or raises InvalidSearch.
     """
-    # `is None`, not falsiness. The previous guard was `if not lat or not lng`,
-    # which rejected lat=0 and lng=0 -- the equator and the prime meridian are
-    # real places, and Null Island is a real test case.
+    # `is None`, not falsiness: the previous guard was `if not lat or not lng`,
+    # which rejected lat=0 and lng=0. The equator and the prime meridian are
+    # real places.
     if lat is None:
         raise InvalidSearch("Latitude is required.")
     if lng is None:
@@ -75,10 +78,7 @@ def validate_search(lat, lng, radius_km, date_str=None):
 
 
 def search_point(lat, lng):
-    """A geography point for the given coordinates.
-
-    Longitude first: ST_MakePoint takes (x, y).
-    """
+    """A geography point for these coordinates. ST_MakePoint takes (x, y)."""
     return func.ST_SetSRID(func.ST_MakePoint(lng, lat), 4326).cast(Geography)
 
 
@@ -86,7 +86,7 @@ def nearby_games(lat, lng, radius_km, date=None, now=None):
     """Games at courts within radius_km, nearest first.
 
     Distance is computed once, in the database, and returned with each row --
-    rather than filtering on it and then recomputing it to sort.
+    rather than filtered on and then recomputed to sort.
     """
     point = search_point(lat, lng)
     distance_m = func.ST_Distance(Court.geog, point).label("distance_m")
@@ -94,11 +94,9 @@ def nearby_games(lat, lng, radius_km, date=None, now=None):
     query = (
         db.session.query(Game, Court, distance_m)
         .join(Court, Game.court_id == Court.id)
-        # The indexable predicate. ST_DWithin(geography, geography, metres) is
-        # what lets the planner use ix_courts_geog; writing
-        # `ST_Distance(...) <= :r` instead would be equivalent in meaning and
-        # force a sequential scan, because a function result cannot be indexed
-        # against a bound at query time.
+        # The indexable predicate. `ST_Distance(...) <= :r` means the same thing
+        # and forces a sequential scan, because a function result cannot be
+        # indexed against a bound supplied at query time.
         .filter(func.ST_DWithin(Court.geog, point, radius_km * METRES_PER_KM))
     )
 
@@ -110,7 +108,7 @@ def nearby_games(lat, lng, radius_km, date=None, now=None):
     else:
         query = query.filter(Game.time >= (now or utcnow()))
 
-    return query.order_by(distance_m, Game.time)
+    return query.order_by(distance_m, Game.time).limit(MAX_RESULTS)
 
 
 def serialize(game, court, distance_m):
@@ -130,8 +128,6 @@ def serialize(game, court, distance_m):
     }
 
 
-# --- caching ---------------------------------------------------------------
-
 NEARBY_TTL_SECONDS = 120
 
 
@@ -140,9 +136,9 @@ def nearby_cache_key(lat, lng, radius_km, date):
 
     Raw coordinates out of a browser's geolocation never repeat, so keying on
     them gives a hit rate of roughly zero. The geohash cell and the rounded
-    radius are both approximations of the caller's request -- tens of metres,
-    which does not matter for "games near me" -- and that is the trade being
-    made for a cache that actually hits.
+    radius are both approximations of the request -- tens of metres, which does
+    not matter for "games near me" -- and that is the trade for a cache that
+    actually hits.
     """
     return caching.make_key(
         "nearby",
@@ -158,11 +154,5 @@ def nearby_cache_tags(lat, lng, radius_km):
 
 
 def invalidate_area(lat, lng):
-    """Drop cached searches that could have included this location.
-
-    Called whenever something a nearby result reports changes: a new court, a
-    new game, or a roster change -- the response carries current_players and
-    spots_available, so a join makes every cached search covering that court
-    wrong.
-    """
+    """Drop cached searches that could have included this location."""
     return caching.invalidate(cell_for(lat, lng))

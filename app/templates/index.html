@@ -7,7 +7,7 @@
     <h1>Find a run near you</h1>
     <p class="lede">Host a game, join a roster, keep the stats.</p>
 
-    {% if error %}<div class="flash flash--error" style="margin-top:1rem">{{ error }}</div>{% endif %}
+    {% if error %}<div class="flash flash--error u-mt-4">{{ error }}</div>{% endif %}
 
     <h2>Log in</h2>
     <form method="post" action="{{ url_for('auth.login') }}">
@@ -30,7 +30,7 @@
   </div>
 
   <div class="card">
-    <h2 style="margin-top:0">Create an account</h2>
+    <h2 class="u-mt-0">Create an account</h2>
     <form method="post" action="{{ url_for('auth.register') }}">
       {{ register_form.hidden_tag() }}
       <div class="field">

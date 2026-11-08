@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, request
 from flask_login import login_required
 from sqlalchemy.orm import selectinload
 
+from app.extensions import limiter
 from app.models import Game
 from app.services import caching
 from app.services.aggregates import all_courts_brief
@@ -27,6 +28,7 @@ bp = Blueprint("api", __name__, url_prefix="/api/v1")
 
 @bp.route("/games/nearby")
 @login_required
+@limiter.limit("60 per minute")
 def games_nearby():
     try:
         lat, lng, radius_km, date = validate_search(
@@ -41,8 +43,8 @@ def games_nearby():
     def compute():
         rows = (
             nearby_games(lat, lng, radius_km, date=date)
-            # serialize() reads game.current_players, which counts the roster.
-            # Without this the response costs one extra query per game returned.
+            # serialize() reads game.current_players, which counts the roster;
+            # without this the response costs a query per game returned.
             .options(selectinload(Game.players))
             .all()
         )

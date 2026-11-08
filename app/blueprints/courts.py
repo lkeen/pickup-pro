@@ -2,6 +2,7 @@
 
 from flask import Blueprint, flash, redirect, render_template, url_for
 from flask_login import current_user, login_required
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.forms import CourtForm
@@ -31,9 +32,17 @@ def create():
             created_by=current_user.id,
         )
         db.session.add(court)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # uq_courts_name_location: the same court at the same place already
+            # exists, entered by someone else or in a parallel request.
+            db.session.rollback()
+            flash("That court already exists.")
+            return render_template("create_court.html", form=form)
+
         # A cached search covering this location would not include the new
-        # court. Drop those entries rather than serve them for the TTL.
+        # court, so drop those entries rather than serve them for the TTL.
         invalidate_area(court.lat, court.lng)
         invalidate_courts()
         flash("Court created successfully!")
