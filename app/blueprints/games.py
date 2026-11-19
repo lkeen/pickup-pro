@@ -74,6 +74,9 @@ def create():
             time=form.start_utc(),
             max_players=form.max_players.data,
         )
+        # The host is playing, so they take the first roster slot. Committed
+        # with the game so a game never exists without its host on the roster.
+        game.players.append(current_user._get_current_object())
         db.session.add(game)
         db.session.commit()
         _invalidate_searches_for(game)
@@ -153,9 +156,7 @@ def detail(game_id):
     if game is None:
         abort(404)
 
-    stats = db.session.scalars(
-        db.select(PlayerStats).filter_by(game_id=game_id)
-    ).all()
+    stats = db.session.scalars(db.select(PlayerStats).filter_by(game_id=game_id)).all()
     my_ratings = db.session.scalars(
         db.select(PlayerRating).filter_by(game_id=game_id, from_user_id=current_user.id)
     ).all()

@@ -88,9 +88,7 @@ def test_registration_requires_an_email(client, db):
     no email field at all."""
     from app.models import User
 
-    response = client.post(
-        "/register", data={"username": "noemail", "password": "long-enough-pw"}
-    )
+    response = client.post("/register", data={"username": "noemail", "password": "long-enough-pw"})
     assert response.status_code == 200
     assert db.session.query(User).filter_by(username="noemail").count() == 0
 
@@ -148,3 +146,25 @@ def test_game_creation_with_valid_input(login, user_factory, court_factory, db):
     game = db.session.query(Game).one()
     assert game.max_players == 10
     assert game.time.year == 2099
+
+
+def test_creating_a_game_puts_the_host_on_the_roster(login, user_factory, court_factory, db):
+    from app.models import Game
+
+    user = user_factory()
+    court = court_factory(created_by=user.id)
+    client = login(user)
+    response = client.post(
+        "/games/create",
+        data={"court_id": str(court.id), "time": "2099-01-01T18:00", "max_players": "2"},
+    )
+    assert response.status_code == 302
+    game = db.session.query(Game).one()
+    assert [player.id for player in game.players] == [user.id]
+    assert game.current_players == 1
+    # The host holds one of the slots, so a two-player game has one left.
+    assert game.can_join(user_factory())
+    assert game.spots_available == 1
+
+    listing = client.get("/games").get_data(as_text=True)
+    assert "1/2" in listing
