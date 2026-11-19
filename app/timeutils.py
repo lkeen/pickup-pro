@@ -3,15 +3,24 @@
 Everything is stored as TIMESTAMPTZ and handled in UTC. Local time exists only
 at the edges: a form submits a wall-clock time and a page renders one back.
 
-A game's time is wall-clock at the court, so interpreting it needs a timezone.
-Per-court zones would be the fully correct model, but this app serves one metro
-area at a time, so APP_TIMEZONE is a single configured zone.
+A wall-clock time means nothing until it is anchored to a zone, and the zone
+that matters is the person's: someone in New York typing 19:00 means 19:00 in
+New York. The browser reports its IANA zone (static/js/timezone.js), with the
+form for input and in a cookie for display. APP_TIMEZONE is the fallback when
+the browser has not said, such as with JavaScript off or on a first visit.
 """
 
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from flask import current_app
+from flask import current_app, has_request_context, request
+
+# Set by static/js/timezone.js.
+TIMEZONE_COOKIE = "tz"
+
+# The longest IANA name is about 30 characters. Anything far past that is not
+# one, so there is no reason to hand it to the zone loader.
+_MAX_ZONE_NAME = 64
 
 
 def utcnow():
@@ -28,19 +37,44 @@ def app_timezone():
         return UTC
 
 
-def to_utc(naive_local):
-    """Interpret a naive wall-clock time in the app timezone, return UTC."""
+def resolve_timezone(name):
+    """The zone for an IANA name supplied by a client, or None if it is not one.
+
+    The name comes from the browser, so it is untrusted: an unknown key, a
+    path, or an empty string all come back as None rather than raising.
+    """
+    if not name or len(name) > _MAX_ZONE_NAME:
+        return None
+    try:
+        return ZoneInfo(name)
+    except (KeyError, ValueError, OSError):
+        # ZoneInfoNotFoundError is a KeyError; path-like keys raise ValueError;
+        # a key naming a directory in the zone database can raise OSError.
+        return None
+
+
+def viewer_timezone():
+    """The zone to show times in: the browser's if it has said, else APP_TIMEZONE."""
+    if has_request_context():
+        zone = resolve_timezone(request.cookies.get(TIMEZONE_COOKIE))
+        if zone is not None:
+            return zone
+    return app_timezone()
+
+
+def to_utc(naive_local, zone=None):
+    """Interpret a naive wall-clock time in ``zone`` (default APP_TIMEZONE), return UTC."""
     if naive_local is None:
         return None
     if naive_local.tzinfo is not None:
         return naive_local.astimezone(UTC)
-    return naive_local.replace(tzinfo=app_timezone()).astimezone(UTC)
+    return naive_local.replace(tzinfo=zone or app_timezone()).astimezone(UTC)
 
 
-def to_local(aware_utc):
-    """Render a stored instant back as wall-clock in the app timezone."""
+def to_local(aware_utc, zone=None):
+    """Render a stored instant as wall-clock in ``zone`` (default APP_TIMEZONE)."""
     if aware_utc is None:
         return None
     if aware_utc.tzinfo is None:
         aware_utc = aware_utc.replace(tzinfo=UTC)
-    return aware_utc.astimezone(app_timezone())
+    return aware_utc.astimezone(zone or app_timezone())

@@ -12,7 +12,7 @@ from app.forms import ConfirmForm, GameForm, RatingForm, StatsForm
 from app.models import Court, Game, GamePlayer, PlayerRating, PlayerStats
 from app.services.aggregates import all_courts_brief
 from app.services.geo import invalidate_area
-from app.timeutils import to_utc, utcnow
+from app.timeutils import to_utc, utcnow, viewer_timezone
 
 bp = Blueprint("games", __name__, url_prefix="/games")
 
@@ -37,7 +37,8 @@ def index():
     if court_id is not None:
         query = query.filter(Game.court_id == court_id)
     if date is not None:
-        start = to_utc(datetime.combine(date, datetime.min.time()))
+        # The day the viewer means, in the zone their times are shown in.
+        start = to_utc(datetime.combine(date, datetime.min.time()), viewer_timezone())
         query = query.filter(Game.time >= start, Game.time < start + timedelta(days=1))
     else:
         # Default to what people come here for. Without a bound the listing
@@ -70,7 +71,7 @@ def create():
         game = Game(
             court_id=form.court_id.data,
             host_id=current_user.id,
-            time=to_utc(form.time.data),
+            time=form.start_utc(),
             max_players=form.max_players.data,
         )
         db.session.add(game)

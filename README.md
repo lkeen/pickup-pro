@@ -51,7 +51,7 @@ app/
   models.py         User, Court, Game, GamePlayer, PlayerStats, PlayerRating
   forms.py          Flask-WTF forms
   security.py       authorization decorators
-  timeutils.py      UTC in storage, APP_TIMEZONE at the edges
+  timeutils.py      UTC in storage, the browser's zone at the edges
   logging.py        structlog, request ids, request timing
   cli.py            flask seed, flask cache-clear
   blueprints/       auth, oauth, courts, games, stats, profiles,
@@ -60,7 +60,7 @@ app/
   static/           css, js, vendored Leaflet and Chart.js
   templates/        base.html and 10 pages
 migrations/         10 revisions, all reversible
-tests/              292 tests
+tests/              305 tests
 benchmarks/         bench_nearby.py
 ```
 
