@@ -22,6 +22,7 @@ from app.services.geo import (
     serialize,
     validate_search,
 )
+from app.timeutils import viewer_timezone
 
 bp = Blueprint("api", __name__, url_prefix="/api/v1")
 
@@ -31,18 +32,19 @@ bp = Blueprint("api", __name__, url_prefix="/api/v1")
 @limiter.limit("60 per minute")
 def games_nearby():
     try:
-        lat, lng, radius_km, date = validate_search(
+        lat, lng, radius_km, day = validate_search(
             request.args.get("lat", type=float),
             request.args.get("lng", type=float),
             request.args.get("radius", type=float),
             request.args.get("date"),
+            viewer_timezone(),
         )
     except InvalidSearch as exc:
         return jsonify({"error": str(exc)}), 400
 
     def compute():
         rows = (
-            nearby_games(lat, lng, radius_km, date=date)
+            nearby_games(lat, lng, radius_km, day=day)
             # serialize() reads game.current_players, which counts the roster;
             # without this the response costs a query per game returned.
             .options(selectinload(Game.players))
@@ -55,7 +57,7 @@ def games_nearby():
         }
 
     payload = caching.get_or_set(
-        nearby_cache_key(lat, lng, radius_km, date),
+        nearby_cache_key(lat, lng, radius_km, day),
         compute,
         ttl=NEARBY_TTL_SECONDS,
         tags=nearby_cache_tags(lat, lng, radius_km),

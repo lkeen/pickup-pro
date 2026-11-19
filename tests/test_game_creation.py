@@ -179,3 +179,85 @@ def test_times_are_labelled_with_app_timezone_until_the_browser_reports_its_own(
 )
 def test_a_client_supplied_zone_name_that_is_not_a_zone_is_ignored(name):
     assert resolve_timezone(name) is None
+
+
+TOKYO = "Asia/Tokyo"
+
+# 01:00 on Sun 05 Jul in Tokyo (UTC+9, no DST) and 12:00 on Sat 04 Jul in
+# New York (EDT, UTC-4): one instant, a different calendar day for each.
+BOUNDARY_GAME = datetime(2099, 7, 4, 16, 0, tzinfo=UTC)
+TOKYO_DAY = "2099-07-05"
+
+
+def nearby_count(client, day):
+    response = client.get(f"/api/v1/games/nearby?lat=33.9519&lng=-83.3576&radius=5&date={day}")
+    assert response.status_code == 200
+    return response.get_json()["count"]
+
+
+def test_every_date_filter_reads_the_day_in_the_viewers_zone(
+    db, utc_server, host_client, court_factory, game_factory
+):
+    court = court_factory(created_by=host_client.user.id)
+    game = game_factory(court=court, host=host_client.user, when=BOUNDARY_GAME)
+    link = f'href="/games/{game.id}"'
+
+    host_client.set_cookie(TIMEZONE_COOKIE, TOKYO)
+    assert link in host_client.get(f"/games?date={TOKYO_DAY}").get_data(as_text=True)
+    assert nearby_count(host_client, TOKYO_DAY) == 1
+
+    # Same date, same search cell, now cached for Tokyo: New York's day is a
+    # different window and must not be served Tokyo's result.
+    host_client.set_cookie(TIMEZONE_COOKIE, NEW_YORK)
+    assert link not in host_client.get(f"/games?date={TOKYO_DAY}").get_data(as_text=True)
+    assert nearby_count(host_client, TOKYO_DAY) == 0
+    assert link in host_client.get("/games?date=2099-07-04").get_data(as_text=True)
+    assert nearby_count(host_client, "2099-07-04") == 1
+
+
+@pytest.mark.parametrize(
+    "browser_timezone,typed",
+    [(NEW_YORK, "9999-12-31T23:00"), (TOKYO, "0001-01-01T00:00")],
+)
+def test_a_time_with_no_utc_equivalent_is_a_form_error(
+    db, utc_server, host_client, court_factory, browser_timezone, typed
+):
+    """Past the ends of the calendar once converted to UTC."""
+    court = court_factory(created_by=host_client.user.id)
+    page = host_client.get("/games/create").get_data(as_text=True)
+
+    response = host_client.post(
+        "/games/create",
+        data={
+            "csrf_token": csrf_token_from(page),
+            "court_id": str(court.id),
+            "time": typed,
+            "max_players": "10",
+            "timezone": browser_timezone,
+        },
+    )
+
+    assert response.status_code == 200
+    assert db.session.query(Game).count() == 0
+    assert "within the calendar" in field_error(response.get_data(as_text=True))
+
+
+@pytest.mark.parametrize(
+    "viewer_timezone,day",
+    [(NEW_YORK, "9999-12-31"), (TOKYO, "0001-01-01"), ("UTC", "9999-12-31")],
+)
+def test_a_date_with_no_utc_equivalent_is_not_a_server_error(
+    db, utc_server, host_client, court_factory, game_factory, viewer_timezone, day
+):
+    court = court_factory(created_by=host_client.user.id)
+    upcoming = game_factory(court=court, host=host_client.user)
+    host_client.set_cookie(TIMEZONE_COOKIE, viewer_timezone)
+
+    listing = host_client.get(f"/games?date={day}")
+    assert listing.status_code == 200
+    # Treated as no date filter: the default upcoming listing.
+    assert f'href="/games/{upcoming.id}"' in listing.get_data(as_text=True)
+
+    search = host_client.get(f"/api/v1/games/nearby?lat=33.9519&lng=-83.3576&date={day}")
+    assert search.status_code == 400
+    assert search.get_json()["error"] == "Date is out of range."

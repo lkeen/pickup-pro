@@ -10,7 +10,8 @@ form for input and in a cookie for display. APP_TIMEZONE is the fallback when
 the browser has not said, such as with JavaScript off or on a first visit.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from datetime import time as time_of_day
 from zoneinfo import ZoneInfo
 
 from flask import current_app, has_request_context, request
@@ -69,6 +70,20 @@ def to_utc(naive_local, zone=None):
     if naive_local.tzinfo is not None:
         return naive_local.astimezone(UTC)
     return naive_local.replace(tzinfo=zone or app_timezone()).astimezone(UTC)
+
+
+def local_day(date, zone=None):
+    """The UTC bounds [start, end) of calendar day ``date`` in ``zone``.
+
+    None when the day cannot be expressed as UTC instants, which happens at the
+    very ends of the calendar (year 1 ahead of UTC, year 9999 behind it).
+    """
+    try:
+        start = to_utc(datetime.combine(date, time_of_day.min), zone)
+        end = to_utc(datetime.combine(date + timedelta(days=1), time_of_day.min), zone)
+    except OverflowError:
+        return None
+    return start, end
 
 
 def to_local(aware_utc, zone=None):

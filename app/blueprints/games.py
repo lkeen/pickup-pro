@@ -1,6 +1,6 @@
 """Game listing, creation, roster management and detail."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -12,7 +12,7 @@ from app.forms import ConfirmForm, GameForm, RatingForm, StatsForm
 from app.models import Court, Game, GamePlayer, PlayerRating, PlayerStats
 from app.services.aggregates import all_courts_brief
 from app.services.geo import invalidate_area
-from app.timeutils import to_utc, utcnow, viewer_timezone
+from app.timeutils import local_day, utcnow, viewer_timezone
 
 bp = Blueprint("games", __name__, url_prefix="/games")
 
@@ -24,6 +24,8 @@ PAGE_SIZE = 20
 def index():
     court_id = request.args.get("court_id", type=int)
     date = _parse_date(request.args.get("date"))
+    # The day the viewer means, in the zone their times are shown in.
+    day = local_day(date, viewer_timezone()) if date is not None else None
 
     # Without these the template triggers a query per row for each of
     # game.court, game.host, game.players and game.can_join(). joinedload for
@@ -36,10 +38,8 @@ def index():
     )
     if court_id is not None:
         query = query.filter(Game.court_id == court_id)
-    if date is not None:
-        # The day the viewer means, in the zone their times are shown in.
-        start = to_utc(datetime.combine(date, datetime.min.time()), viewer_timezone())
-        query = query.filter(Game.time >= start, Game.time < start + timedelta(days=1))
+    if day is not None:
+        query = query.filter(Game.time >= day[0], Game.time < day[1])
     else:
         # Default to what people come here for. Without a bound the listing
         # grows without limit and page one is the oldest game ever played.
@@ -177,7 +177,7 @@ def _parse_date(raw):
         return None
     try:
         # Naive on purpose: a calendar date has no timezone until it is anchored
-        # to one, which to_utc does for it.
+        # to one, which local_day does for it.
         return datetime.strptime(raw, "%Y-%m-%d").date()  # noqa: DTZ007
     except ValueError:
         return None

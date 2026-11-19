@@ -112,7 +112,11 @@ class GameForm(FlaskForm):
         """
         if field.data is None:
             return
-        if self.start_utc() <= utcnow():
+        try:
+            start = self.start_utc()
+        except OverflowError:
+            raise ValidationError("Pick a date within the calendar.") from None
+        if start <= utcnow():
             now = to_local(utcnow(), self.start_zone())
             raise ValidationError(
                 f"Pick a time in the future. Times are in {now.tzinfo}, "
