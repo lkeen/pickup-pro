@@ -73,6 +73,9 @@ def create():
             time=to_utc(form.time.data),
             max_players=form.max_players.data,
         )
+        # The host is playing, so they take the first roster slot. Committed
+        # with the game so a game never exists without its host on the roster.
+        game.players.append(current_user._get_current_object())
         db.session.add(game)
         db.session.commit()
         _invalidate_searches_for(game)
