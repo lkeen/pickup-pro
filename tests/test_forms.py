@@ -88,9 +88,7 @@ def test_registration_requires_an_email(client, db):
     no email field at all."""
     from app.models import User
 
-    response = client.post(
-        "/register", data={"username": "noemail", "password": "long-enough-pw"}
-    )
+    response = client.post("/register", data={"username": "noemail", "password": "long-enough-pw"})
     assert response.status_code == 200
     assert db.session.query(User).filter_by(username="noemail").count() == 0
 

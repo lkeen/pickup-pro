@@ -152,9 +152,7 @@ def detail(game_id):
     if game is None:
         abort(404)
 
-    stats = db.session.scalars(
-        db.select(PlayerStats).filter_by(game_id=game_id)
-    ).all()
+    stats = db.session.scalars(db.select(PlayerStats).filter_by(game_id=game_id)).all()
     my_ratings = db.session.scalars(
         db.select(PlayerRating).filter_by(game_id=game_id, from_user_id=current_user.id)
     ).all()
