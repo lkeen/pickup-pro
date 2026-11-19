@@ -60,7 +60,7 @@ app/
   static/           css, js, vendored Leaflet and Chart.js
   templates/        base.html and 10 pages
 migrations/         10 revisions, all reversible
-tests/              305 tests
+tests/              311 tests
 benchmarks/         bench_nearby.py
 ```
 
