@@ -8,6 +8,7 @@ from flask_wtf import FlaskForm
 from wtforms import (
     DateTimeLocalField,
     FloatField,
+    HiddenField,
     IntegerField,
     PasswordField,
     SelectField,
@@ -21,7 +22,10 @@ from wtforms.validators import (
     Length,
     NumberRange,
     Regexp,
+    ValidationError,
 )
+
+from app.timeutils import resolve_timezone, to_local, to_utc, utcnow, viewer_timezone
 
 LAT_RANGE = NumberRange(min=-90, max=90, message="Latitude must be between -90 and 90.")
 LNG_RANGE = NumberRange(min=-180, max=180, message="Longitude must be between -180 and 180.")
@@ -87,6 +91,37 @@ class GameForm(FlaskForm):
     max_players = IntegerField(
         "Max players", default=10, validators=[InputRequired(), NumberRange(min=2, max=20)]
     )
+    # The browser's IANA zone, filled in by static/js/timezone.js. The time
+    # above is wall-clock for the person typing it, so this is what anchors it.
+    timezone = HiddenField(render_kw={"data-browser-timezone": ""})
+
+    def start_zone(self):
+        """The zone the entered time is in: the browser's, else the fallback."""
+        return resolve_timezone(self.timezone.data) or viewer_timezone()
+
+    def start_utc(self):
+        return to_utc(self.time.data, self.start_zone())
+
+    def validate_time(self, field):
+        """Reject a start that has already passed.
+
+        A past one would be stored and then hidden by every listing and search,
+        since they all look forward from now: the host is told the game was
+        created and never finds it. The message names the zone, which matters
+        when the fallback zone is not the host's own.
+        """
+        if field.data is None:
+            return
+        try:
+            start = self.start_utc()
+        except OverflowError:
+            raise ValidationError("Pick a date within the calendar.") from None
+        if start <= utcnow():
+            now = to_local(utcnow(), self.start_zone())
+            raise ValidationError(
+                f"Pick a time in the future. Times are in {now.tzinfo}, "
+                f"where it is now {now:%a %d %b, %H:%M}."
+            )
 
     def set_court_choices(self, courts):
         """Populate the court options, which is also what validates the id."""

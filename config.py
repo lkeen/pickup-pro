@@ -83,8 +83,9 @@ class BaseConfig:
     # exposed directly and client-supplied X-Forwarded-* headers are ignored.
     TRUSTED_PROXY_HOPS = _int_env("TRUSTED_PROXY_HOPS", 0)
 
-    # Wall-clock times are interpreted and displayed in this zone; everything is
-    # stored in UTC. One zone per deployment, which suits a single metro area.
+    # Wall-clock times are read and shown in the browser's own zone, which it
+    # reports; this is the fallback when it has not, such as with JavaScript
+    # off. Everything is stored in UTC.
     APP_TIMEZONE = os.getenv("APP_TIMEZONE", "UTC")
 
     REDIS_URL = os.getenv("REDIS_URL", DEFAULT_REDIS_URL)

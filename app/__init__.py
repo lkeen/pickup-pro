@@ -88,14 +88,18 @@ def register_template_helpers(app):
             f'<input type="hidden" name="csrf_token" value="{generate_csrf()}">'
         )
 
-    from app.timeutils import to_local
+    from app.timeutils import to_local, viewer_timezone
 
     @app.template_filter("localtime")
-    def localtime(value, fmt="%a %d %b, %H:%M"):
-        """Render a stored UTC instant as wall-clock in APP_TIMEZONE."""
+    def localtime(value, fmt="%a %d %b, %H:%M %Z"):
+        """Render a stored UTC instant as wall-clock in the viewer's zone.
+
+        Labelled with the zone's abbreviation, since on a first visit, or with
+        JavaScript off, the zone is APP_TIMEZONE rather than the viewer's own.
+        """
         if value is None:
             return ""
-        return to_local(value).strftime(fmt)
+        return to_local(value, viewer_timezone()).strftime(fmt)
 
     @app.template_filter("localdate")
     def localdate(value, fmt="%Y-%m-%d"):

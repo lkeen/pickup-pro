@@ -32,11 +32,19 @@ class TestKeyQuantisation:
     def test_radius_is_part_of_the_key(self):
         assert nearby_cache_key(*ATHENS, 10.0, None) != nearby_cache_key(*ATHENS, 25.0, None)
 
-    def test_date_is_part_of_the_key(self):
-        from datetime import date
+    def test_the_day_is_part_of_the_key(self):
+        from datetime import UTC, datetime
 
-        assert nearby_cache_key(*ATHENS, 10.0, None) != nearby_cache_key(
-            *ATHENS, 10.0, date(2026, 7, 4)
+        utc_day = (datetime(2026, 7, 4, tzinfo=UTC), datetime(2026, 7, 5, tzinfo=UTC))
+        # The same date in New York (EDT, UTC-4) is a different window.
+        new_york_day = (
+            datetime(2026, 7, 4, 4, tzinfo=UTC),
+            datetime(2026, 7, 5, 4, tzinfo=UTC),
+        )
+        upcoming = nearby_cache_key(*ATHENS, 10.0, None)
+        assert upcoming != nearby_cache_key(*ATHENS, 10.0, utc_day)
+        assert nearby_cache_key(*ATHENS, 10.0, utc_day) != nearby_cache_key(
+            *ATHENS, 10.0, new_york_day
         )
 
 

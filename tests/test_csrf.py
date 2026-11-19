@@ -14,6 +14,7 @@ STATE_CHANGING = [
     ("/register", {"username": "newcomer", "password": "long-enough-pw"}),
     ("/logout", {}),
     ("/courts/create", {"name": "X", "address": "Y", "lat": "1", "lng": "2"}),
+    ("/games/create", {"court_id": "1", "time": "2099-01-01T18:00", "max_players": "10"}),
     ("/games/1/join", {}),
     ("/games/1/leave", {}),
     ("/games/1/stats", {"user_id": "1", "points": "1", "rebounds": "1", "assists": "1"}),
