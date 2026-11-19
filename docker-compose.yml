@@ -37,8 +37,10 @@ services:
     restart: always
     env_file:
       - .env
+    # Loopback only, for running the app on the host. Published on every
+    # interface, the database would be reachable from the network.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -60,8 +62,10 @@ services:
       --maxmemory 256mb
       --maxmemory-policy allkeys-lru
       --save ""
+    # Loopback only. Redis here has no password, and Flask-Caching stores
+    # pickled values, so anyone who could write to it could run code in the app.
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
