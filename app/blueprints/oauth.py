@@ -80,7 +80,7 @@ def callback():
     session.clear()
     session.permanent = True
     login_user(user)
-    return redirect(url_for("auth.dashboard"))
+    return redirect(url_for("home.index"))
 
 
 def resolve_oauth_user(provider, claims):

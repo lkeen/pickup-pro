@@ -1,4 +1,4 @@
-"""Court listing and creation."""
+"""The court directory and adding a court."""
 
 from flask import Blueprint, flash, redirect, render_template, url_for
 from flask_login import current_user, login_required
@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from app.extensions import db
 from app.forms import CourtForm
 from app.models import Court
+from app.services import listings
 from app.services.aggregates import all_courts_brief, invalidate_courts
 from app.services.geo import invalidate_area
 
@@ -16,7 +17,9 @@ bp = Blueprint("courts", __name__, url_prefix="/courts")
 @bp.route("")
 @login_required
 def index():
-    return render_template("courts.html", courts=all_courts_brief())
+    return render_template(
+        "courts.html", courts=all_courts_brief(), counts=listings.upcoming_counts()
+    )
 
 
 @bp.route("/create", methods=["GET", "POST"])
@@ -45,7 +48,8 @@ def create():
         # court, so drop those entries rather than serve them for the TTL.
         invalidate_area(court.lat, court.lng)
         invalidate_courts()
-        flash("Court created successfully!")
-        return redirect(url_for("courts.index"))
+        flash("Court added. Host the first game there.")
+        # Straight to the new court on the map, where hosting is one tap away.
+        return redirect(url_for("home.index", court=court.id))
 
     return render_template("create_court.html", form=form)

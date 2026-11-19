@@ -6,6 +6,7 @@ attribute. Jinja escapes for HTML, not for JS string context, so a comment with 
 backslash in it broke the call.
 """
 
+import re
 from datetime import UTC
 
 import pytest
@@ -79,7 +80,7 @@ class TestLayout:
     def test_the_page_title_is_specific(self, db, login, user_factory):
         client = login(user_factory())
         body = client.get("/games").get_data(as_text=True)
-        assert "<title>Games — Pickup Pro</title>" in body
+        assert "<title>Games - Pickup Pro</title>" in body
         assert "Flask Authentication" not in body
 
     def test_logout_in_the_nav_carries_a_csrf_token(self, db, login, user_factory):
@@ -89,10 +90,34 @@ class TestLayout:
         body = client.get("/games").get_data(as_text=True)
         assert 'name="csrf_token"' in body
 
-    def test_the_nav_marks_the_current_section(self, db, login, user_factory):
+    @pytest.mark.parametrize(
+        "path,label",
+        [("/dashboard", ">Map</a>"), ("/games/mine", ">My games</a>")],
+    )
+    def test_the_nav_marks_the_current_section(self, db, login, user_factory, path, label):
         client = login(user_factory())
-        body = client.get("/courts").get_data(as_text=True)
-        assert 'aria-current="page"' in body
+        body = client.get(path).get_data(as_text=True)
+        nav = body[body.index('<nav class="topnav"'):body.index("</nav>")]
+        current = re.search(r'<a [^>]*aria-current="page"[^>]*>[^<]*</a>', nav)
+        assert current, f"nothing in the nav is marked current on {path}"
+        assert current.group(0).endswith(label)
+
+    def test_secondary_pages_sit_in_the_account_menu(self, db, login, user_factory):
+        """Leaderboard, profile and courts stay one tap away without crowding
+        the bar."""
+        user = user_factory()
+        body = login(user).get("/dashboard").get_data(as_text=True)
+        menu = body[body.index('<details class="menu">'):body.index("</details>")]
+        for href in (f"/users/{user.id}", "/leaderboard", "/courts", "/courts/create", "/games"):
+            assert f'href="{href}"' in menu, f"{href} is missing from the account menu"
+        assert "Log out" in menu
+
+    def test_hosting_is_one_tap_from_every_page(self, db, login, user_factory):
+        client = login(user_factory())
+        for path in ["/dashboard", "/games", "/games/mine", "/leaderboard", "/courts"]:
+            body = client.get(path).get_data(as_text=True)
+            topbar = body[body.index('<header class="topbar">'):body.index("</header>")]
+            assert 'href="/games/create"' in topbar, f"no host button on {path}"
 
     def test_anonymous_pages_show_no_nav(self, client):
         body = client.get("/").get_data(as_text=True)

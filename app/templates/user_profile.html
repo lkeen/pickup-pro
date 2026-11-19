@@ -1,13 +1,16 @@
 {% extends "base.html" %}
-{% block title %}{{ user.username }} — Pickup Pro{% endblock %}
+{% from "_macros.html" import avatar %}
+{% block title %}{{ user.username }} - Pickup Pro{% endblock %}
 
 {% block body %}
-<div class="page-header">
+<div class="profile-head">
+  {{ avatar(user.username, "lg") }}
   <div>
     <h1>{{ user.username }}</h1>
     <p class="lede">
       {% if summary.avg_rating is not none %}
-        Rated {{ "%.2f"|format(summary.avg_rating) }}/5 across {{ summary.total_ratings }} ratings
+        Rated {{ "%.2f" | format(summary.avg_rating) }} out of 5 from {{ summary.total_ratings }}
+        {{ "rating" if summary.total_ratings == 1 else "ratings" }}
       {% else %}
         No ratings yet
       {% endif %}
@@ -15,50 +18,64 @@
   </div>
 </div>
 
-<div class="card">
-  <h3>Lifetime</h3>
+<section class="section section--first" aria-labelledby="lifetime-title">
+  <h2 id="lifetime-title" class="section__title section__title--spaced">Lifetime</h2>
   {% if summary.games_played %}
-  <div class="stat-grid">
-    <div class="stat"><span class="stat__value">{{ summary.games_played }}</span><span class="stat__label">Games</span></div>
-    <div class="stat"><span class="stat__value">{{ summary.total_points }}</span><span class="stat__label">Points</span></div>
-    <div class="stat"><span class="stat__value">{{ summary.total_rebounds }}</span><span class="stat__label">Rebounds</span></div>
-    <div class="stat"><span class="stat__value">{{ summary.total_assists }}</span><span class="stat__label">Assists</span></div>
-    <div class="stat"><span class="stat__value">{{ "%.1f"|format(summary.avg_points) }}</span><span class="stat__label">Pts / game</span></div>
-    <div class="stat"><span class="stat__value">{{ "%.1f"|format(summary.avg_rebounds) }}</span><span class="stat__label">Reb / game</span></div>
-    <div class="stat"><span class="stat__value">{{ "%.1f"|format(summary.avg_assists) }}</span><span class="stat__label">Ast / game</span></div>
-  </div>
+  <dl class="stat-strip">
+    <div class="stat">
+      <dt class="stat__label">Games</dt>
+      <dd class="stat__value">{{ summary.games_played }}</dd>
+    </div>
+    <div class="stat">
+      <dt class="stat__label">Points</dt>
+      <dd class="stat__value">{{ summary.total_points }}</dd>
+      <dd class="stat__sub">{{ "%.1f" | format(summary.avg_points) }} per game</dd>
+    </div>
+    <div class="stat">
+      <dt class="stat__label">Rebounds</dt>
+      <dd class="stat__value">{{ summary.total_rebounds }}</dd>
+      <dd class="stat__sub">{{ "%.1f" | format(summary.avg_rebounds) }} per game</dd>
+    </div>
+    <div class="stat">
+      <dt class="stat__label">Assists</dt>
+      <dd class="stat__value">{{ summary.total_assists }}</dd>
+      <dd class="stat__sub">{{ "%.1f" | format(summary.avg_assists) }} per game</dd>
+    </div>
+  </dl>
   {% else %}
-  <p class="muted">No game statistics available yet.</p>
+  <div class="empty empty--boxed">
+    <p>No game statistics available yet.</p>
+  </div>
   {% endif %}
-</div>
+</section>
 
 {% if chart_data.games | length >= 2 %}
-<div class="grid grid--2 u-mt-4">
-  <div class="card">
-    <h3>Stat trend</h3>
-    <div class="chart-box"><canvas id="stat-trend"></canvas></div>
-  </div>
-  <div class="card">
-    <h3>Ratings received</h3>
-    <div class="chart-box"><canvas id="rating-distribution"></canvas></div>
-  </div>
+<div class="grid grid--2 section">
+  <section class="panel-card" aria-labelledby="trend-title">
+    <h2 id="trend-title" class="section__title">Stat trend</h2>
+    <div class="chart-box"><canvas id="stat-trend" role="img" aria-label="Points, rebounds and assists over recent games"></canvas></div>
+  </section>
+  <section class="panel-card" aria-labelledby="ratings-chart-title">
+    <h2 id="ratings-chart-title" class="section__title">Ratings received</h2>
+    <div class="chart-box"><canvas id="rating-distribution" role="img" aria-label="How many times each rating from 1 to 5 was received"></canvas></div>
+  </section>
 </div>
 {% endif %}
 
 <script type="application/json" id="profile-chart-data">{{ chart_data | tojson }}</script>
 
-<div class="grid grid--2 u-mt-4">
-  <div class="card card--flush">
-    <div class="card__head"><h3>Recent games</h3></div>
+<div class="grid grid--2 section">
+  <section aria-labelledby="recent-games-title">
+    <h2 id="recent-games-title" class="section__title section__title--spaced">Recent games</h2>
     {% if recent_games %}
-    <div class="table-wrap">
-      <table>
+    <div class="table-wrap list-card">
+      <table class="table">
         <thead><tr><th>Date</th><th>Court</th><th class="numeric">Pts</th><th class="numeric">Reb</th><th class="numeric">Ast</th></tr></thead>
         <tbody>
           {% for game, stats in recent_games %}
           <tr>
-            <td class="muted">{{ game.time | localdate }}</td>
-            <td>{{ game.court.name }}</td>
+            <td class="muted nowrap">{{ game.time | localtime("%d %b") }}</td>
+            <td><a href="{{ url_for('games.detail', game_id=game.id) }}">{{ game.court.name }}</a></td>
             <td class="numeric">{{ stats.points }}</td>
             <td class="numeric">{{ stats.rebounds }}</td>
             <td class="numeric">{{ stats.assists }}</td>
@@ -67,35 +84,35 @@
         </tbody>
       </table>
     </div>
-    {% else %}<div class="empty"><p>No games with stats yet.</p></div>{% endif %}
-  </div>
+    {% else %}<div class="empty empty--boxed"><p>No games with stats yet.</p></div>{% endif %}
+  </section>
 
-  <div class="card card--flush">
-    <div class="card__head"><h3>Recent ratings</h3></div>
+  <section aria-labelledby="recent-ratings-title">
+    <h2 id="recent-ratings-title" class="section__title section__title--spaced">Recent ratings</h2>
     {% if recent_ratings %}
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>From</th><th class="numeric">Rating</th><th>Comment</th><th>Date</th></tr></thead>
-        <tbody>
-          {% for rating, from_user in recent_ratings %}
-          <tr>
-            <td>{{ from_user.username }}</td>
-            <td class="numeric"><strong>{{ rating.rating }}</strong><span class="muted">/5</span></td>
-            <td class="muted">{{ rating.comment if rating.comment else "—" }}</td>
-            <td class="muted small">{{ rating.created_at | localdate }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}<div class="empty"><p>No ratings received yet.</p></div>{% endif %}
-  </div>
+    <ul class="people list-card">
+      {% for rating, from_user in recent_ratings %}
+      <li class="person">
+        {{ avatar(from_user.username) }}
+        <div class="person__body">
+          <p class="person__name">
+            <a href="{{ url_for('profiles.detail', user_id=from_user.id) }}">{{ from_user.username }}</a>
+            <span class="muted small">{{ rating.created_at | localtime("%d %b") }}</span>
+          </p>
+          {% if rating.comment %}<p class="person__meta person__meta--wrap">{{ rating.comment }}</p>{% endif %}
+        </div>
+        <span class="score">{{ rating.rating }}<span class="muted">/5</span></span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<div class="empty empty--boxed"><p>No ratings received yet.</p></div>{% endif %}
+  </section>
 </div>
 {% endblock %}
 
 {% block scripts %}
 {% if chart_data.games | length >= 2 %}
-<script src="{{ url_for('static', filename='vendor/chart.umd.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/charts.js') }}" defer></script>
 {% endif %}
 {% endblock %}

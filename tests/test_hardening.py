@@ -37,9 +37,11 @@ class TestSecurityHeaders:
         assert "frame-ancestors 'none'" in policy
 
     def test_the_map_tile_host_is_allowed(self, client):
-        """The one third-party origin the app actually loads from."""
+        """The one third-party origin the app actually loads from: the single
+        tile host OpenStreetMap asks clients to use, not its retired a/b/c
+        subdomains."""
         policy = client.get("/").headers["Content-Security-Policy"]
-        assert "https://*.tile.openstreetmap.org" in policy
+        assert "img-src 'self' data: https://tile.openstreetmap.org;" in policy
 
     @pytest.mark.parametrize("template", sorted(TEMPLATE_DIR.glob("*.html")), ids=lambda p: p.name)
     def test_no_template_carries_an_inline_style_or_handler(self, template):

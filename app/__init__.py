@@ -88,7 +88,7 @@ def register_template_helpers(app):
             f'<input type="hidden" name="csrf_token" value="{generate_csrf()}">'
         )
 
-    from app.timeutils import to_local, viewer_timezone
+    from app.timeutils import to_local, utcnow, viewer_timezone
 
     @app.template_filter("localtime")
     def localtime(value, fmt="%a %d %b, %H:%M %Z"):
@@ -104,6 +104,24 @@ def register_template_helpers(app):
     @app.template_filter("localdate")
     def localdate(value, fmt="%Y-%m-%d"):
         return localtime(value, fmt)
+
+    @app.template_filter("relday")
+    def relday(value):
+        """The viewer's calendar day for an instant, said the way people say it.
+
+        "Today", "Tomorrow" and "Yesterday" where they apply, otherwise a short
+        date such as "Sat 21 Nov". Built from parts because %-d, the unpadded
+        day, is not portable across platforms.
+        """
+        if value is None:
+            return ""
+        zone = viewer_timezone()
+        local = to_local(value, zone)
+        delta = (local.date() - to_local(utcnow(), zone).date()).days
+        named = {-1: "Yesterday", 0: "Today", 1: "Tomorrow"}
+        if delta in named:
+            return named[delta]
+        return f"{local:%a} {local.day} {local:%b}"
 
 
 def register_blueprints(app):
@@ -133,14 +151,16 @@ def register_health_check(app):
         return {"status": "ok"}
 
 
-# Tiles come from OpenStreetMap; everything else is served from this origin.
-# No 'unsafe-inline' anywhere, which is only possible because no template
-# carries an inline script, style attribute or event handler.
+# Map tiles come from OpenStreetMap; everything else is served from this
+# origin. No 'unsafe-inline' anywhere, which is only possible because no
+# template carries an inline script, style attribute or event handler.
+MAP_TILE_ORIGIN = "https://tile.openstreetmap.org"
+
 CSP = (
     "default-src 'self'; "
     "script-src 'self'; "
     "style-src 'self'; "
-    "img-src 'self' data: https://*.tile.openstreetmap.org; "
+    f"img-src 'self' data: {MAP_TILE_ORIGIN}; "
     "connect-src 'self'; "
     "font-src 'self'; "
     "object-src 'none'; "

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, game_item with context %}
+{% block title %}My games - Pickup Pro{% endblock %}
+
+{% set here = request.full_path.rstrip("?") %}
+
+{% block body %}
+{% include "_games_head.html" %}
+
+<section class="section section--first" aria-labelledby="next-title">
+  <div class="section__head">
+    <h2 id="next-title" class="section__title">Up next</h2>
+    {% if upcoming %}<span class="muted small">{{ upcoming | length }} {{ "game" if upcoming | length == 1 else "games" }}</span>{% endif %}
+  </div>
+  {% if upcoming %}
+  <ul class="game-list list-card">
+    {% for game in upcoming %}
+      {{ game_item(game, here) }}
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty empty--boxed">
+    <p class="empty__title">Nothing booked</p>
+    <p>Find a game on the map and join it, or host your own.</p>
+    <div class="empty__actions">
+      <a href="{{ url_for('home.index') }}" class="btn btn--primary btn--sm">Find a game</a>
+      <a href="{{ url_for('games.create') }}" class="btn btn--sm">Host a game</a>
+    </div>
+  </div>
+  {% endif %}
+</section>
+
+<section class="section" aria-labelledby="played-title">
+  <div class="section__head">
+    <h2 id="played-title" class="section__title">Played</h2>
+    {% if past %}<span class="muted small">Open a game to add stats and rate players</span>{% endif %}
+  </div>
+  {% if past %}
+  <ul class="game-list list-card">
+    {% for game in past %}
+      {{ game_item(game, here, actions=false) }}
+    {% endfor %}
+  </ul>
+
+  {% if pagination.pages > 1 %}
+  <nav class="pager" aria-label="Pagination">
+    {% if pagination.has_prev %}
+      <a class="btn btn--sm" href="{{ url_for('games.mine', page=pagination.prev_num) }}">{{ icon("back") }}Newer</a>
+    {% else %}<span></span>{% endif %}
+    <span class="pager__status">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+    {% if pagination.has_next %}
+      <a class="btn btn--sm" href="{{ url_for('games.mine', page=pagination.next_num) }}">Older{{ icon("arrow") }}</a>
+    {% else %}<span></span>{% endif %}
+  </nav>
+  {% endif %}
+  {% else %}
+  <div class="empty empty--boxed">
+    <p class="empty__title">No games played yet</p>
+    <p>Games you play show up here, ready for stats.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
