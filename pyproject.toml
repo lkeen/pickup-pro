@@ -21,6 +21,9 @@ select = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The `pytest` entry point does not put the repo root on sys.path (only
+# `python -m pytest` does), so make the `app` package importable explicitly.
+pythonpath = ["."]
 addopts = "-ra --strict-markers"
 filterwarnings = [
     # Our own deprecations are bugs; fail on them.
