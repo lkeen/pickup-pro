@@ -21,7 +21,10 @@ from wtforms.validators import (
     Length,
     NumberRange,
     Regexp,
+    ValidationError,
 )
+
+from app.timeutils import to_local, to_utc, utcnow
 
 LAT_RANGE = NumberRange(min=-90, max=90, message="Latitude must be between -90 and 90.")
 LNG_RANGE = NumberRange(min=-180, max=180, message="Longitude must be between -180 and 180.")
@@ -87,6 +90,24 @@ class GameForm(FlaskForm):
     max_players = IntegerField(
         "Max players", default=10, validators=[InputRequired(), NumberRange(min=2, max=20)]
     )
+
+    def validate_time(self, field):
+        """Reject a start that has already passed.
+
+        The time is wall-clock in APP_TIMEZONE. A past one would be stored, and
+        then hidden by every listing and search, since they all look forward
+        from now: the host is told the game was created and never finds it. A
+        host whose own zone differs from APP_TIMEZONE hits this with a time
+        that is still ahead of them, so the message names the zone.
+        """
+        if field.data is None:
+            return
+        if to_utc(field.data) <= utcnow():
+            now = to_local(utcnow())
+            raise ValidationError(
+                f"Pick a time in the future. Times are in {now.tzinfo}, "
+                f"where it is now {now:%a %d %b, %H:%M}."
+            )
 
     def set_court_choices(self, courts):
         """Populate the court options, which is also what validates the id."""

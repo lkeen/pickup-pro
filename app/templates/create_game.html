@@ -21,7 +21,7 @@
       </div>
       <div class="field">
         <label for="time">Date and time</label>
-        <input type="datetime-local" id="time" name="time" required>
+        <input type="datetime-local" id="time" name="time" value="{{ form.time._value() }}" required>
         {% for e in form.time.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
       </div>
       <div class="field">

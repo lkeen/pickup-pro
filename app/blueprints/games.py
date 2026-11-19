@@ -77,7 +77,10 @@ def create():
         db.session.commit()
         _invalidate_searches_for(game)
         flash("Game created successfully!")
-        return redirect(url_for("games.index"))
+        # The game's own page rather than the listing: the listing is filtered
+        # and paginated, so the game just created is not guaranteed to be on
+        # its first page.
+        return redirect(url_for("games.detail", game_id=game.id))
 
     return render_template("create_game.html", form=form)
 

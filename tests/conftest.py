@@ -12,6 +12,7 @@ import os
 import re
 
 import pytest
+from flask.testing import FlaskClient
 from flask_migrate import upgrade as alembic_upgrade
 from sqlalchemy import text
 
@@ -23,9 +24,31 @@ from app.services import caching
 DEFAULT_PASSWORD = "correct-horse-battery"
 
 
+class RequestScopedClient(FlaskClient):
+    """A test client whose every request gets its own app context.
+
+    The fixtures below keep an app context pushed for the whole test, and Flask
+    reuses an already-pushed context for a test-client request instead of
+    pushing a new one. Every request in a test then shares one ``g``, so
+    anything an extension caches there carries over: Flask-Login's current user
+    and Flask-WTF's CSRF token among them. A multi-step flow such as logging in
+    and then submitting a form behaves differently from a browser's under that.
+    A real server gives each request a fresh context, so this does too.
+    """
+
+    def open(self, *args, **kwargs):
+        # ``with client:`` keeps the request context alive after the request
+        # for inspection, which a context popped here would break.
+        if self.preserve_context:
+            return super().open(*args, **kwargs)
+        with self.application.app_context():
+            return super().open(*args, **kwargs)
+
+
 @pytest.fixture(scope="session")
 def app():
     application = create_app("testing")
+    application.test_client_class = RequestScopedClient
 
     uri = application.config["SQLALCHEMY_DATABASE_URI"]
     if not uri:
