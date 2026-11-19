@@ -18,6 +18,9 @@
         {% for km in radius_choices %}
           <option value="{{ km }}" {% if (search and search.radius == km) or (not search and km == 10) %}selected{% endif %}>within {{ km }} km</option>
         {% endfor %}
+        {% if search and search.radius not in radius_choices %}
+          <option value="{{ '%g' | format(search.radius) }}" data-custom selected>within {{ '%g' | format(search.radius) }} km</option>
+        {% endif %}
       </select>
     </label>
   </div>

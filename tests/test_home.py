@@ -125,6 +125,13 @@ class TestHomePage:
         ).get_data(as_text=True)
         assert '<option value="25" selected>' in body
 
+    def test_the_radius_picker_shows_an_area_search_radius(self, db, login, user_factory):
+        body = login(user_factory()).get(
+            f"/dashboard?lat={ATHENS[0]}&lng={ATHENS[1]}&radius=12.3"
+        ).get_data(as_text=True)
+        selected = re.findall(r"<option[^>]*\bselected\b[^>]*>([^<]*)</option>", body)
+        assert selected == ["within 12.3 km"]
+
 
 class TestYourGames:
     def test_it_lists_hosted_and_joined_games_upcoming_first(

@@ -39,6 +39,12 @@
     });
   }
 
+  function textTooltip(text) {
+    var span = document.createElement("span");
+    span.textContent = text;
+    return span;
+  }
+
   function readJson(id) {
     var node = document.getElementById(id);
     if (!node) return null;
@@ -83,7 +89,7 @@
         zIndexOffset: count ? 100 : 0
       }).addTo(map);
       marker.bindTooltip(
-        court.name + (count ? " · " + count + (count === 1 ? " game" : " games") : ""),
+        textTooltip(court.name + (count ? " · " + count + (count === 1 ? " game" : " games") : "")),
         { direction: "top", offset: [0, -(size / 2) - 2] }
       );
       marker.on("click", function () { showCourt(court.id, true); });
@@ -216,7 +222,29 @@
       return Math.round(value * 1e5) / 1e5;
     }
 
+    function showRadius(radiusKm) {
+      if (!radiusSelect) return;
+      var custom = radiusSelect.querySelector("option[data-custom]");
+      var preset = Array.prototype.some.call(radiusSelect.options, function (option) {
+        return option !== custom && Number(option.value) === radiusKm;
+      });
+      if (preset) {
+        if (custom) custom.remove();
+        radiusSelect.value = String(radiusKm);
+        return;
+      }
+      if (!custom) {
+        custom = document.createElement("option");
+        custom.setAttribute("data-custom", "");
+        radiusSelect.appendChild(custom);
+      }
+      custom.value = String(radiusKm);
+      custom.textContent = "within " + radiusKm + " km";
+      custom.selected = true;
+    }
+
     function search(lat, lng, radiusKm, options) {
+      showRadius(radiusKm);
       highlight(null);
       hideAreaButton();
       drawSearch(lat, lng, radiusKm, options.fromYou);
@@ -320,8 +348,12 @@
         var halfWidth = center.distanceTo(L.latLng(center.lat, bounds.getEast()));
         var km = Math.min(Math.max(Math.min(halfHeight, halfWidth) / 1000, 0.5), 200);
         km = Math.round(km * 10) / 10;
-        lastSearch = { lat: center.lat, lng: center.lng, fromYou: false };
-        search(center.lat, center.lng, km, { fromYou: false, fit: false, push: true });
+        var at = center.wrap();
+        if (at.lng !== center.lng) {
+          moveQuietly(function () { map.setView(at, map.getZoom(), { animate: false }); });
+        }
+        lastSearch = { lat: at.lat, lng: at.lng, fromYou: false };
+        search(at.lat, at.lng, km, { fromYou: false, fit: false, push: true });
       });
     }
 
@@ -445,7 +477,7 @@
         var points = [];
         body.courts.forEach(function (court) {
           L.marker([court.lat, court.lng], { icon: pin("muted", 12), keyboard: false })
-            .bindTooltip(court.name, { direction: "top", offset: [0, -8] })
+            .bindTooltip(textTooltip(court.name), { direction: "top", offset: [0, -8] })
             .addTo(map);
           points.push([court.lat, court.lng]);
         });
