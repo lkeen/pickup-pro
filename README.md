@@ -60,13 +60,14 @@ app/
   static/           css, js, vendored Leaflet and Chart.js
   templates/        base.html, 11 pages and 3 partials
 migrations/         10 revisions, all reversible
-tests/              370 tests
+tests/              371 tests
 benchmarks/         bench_nearby.py
 ```
 
 Blueprints handle HTTP. They parse input, check authorization, and render.
 Services hold the logic worth testing on its own, meaning the spatial query
-builder, the cache helper and its tag registry, and the aggregate queries.
+builder, the cache helper and its tag registry, the aggregate queries, and the
+game listings behind the map panel and "my games".
 Models are the schema. A blueprint can call a service, a service never imports a
 blueprint.
 
