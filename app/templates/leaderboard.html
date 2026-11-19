@@ -1,68 +1,65 @@
 {% extends "base.html" %}
-{% block title %}Leaderboard — Pickup Pro{% endblock %}
+{% from "_macros.html" import avatar %}
+{% block title %}Leaderboard - Pickup Pro{% endblock %}
 
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/autosubmit.js') }}" defer></script>
-{% endblock %}
+{% set short_labels = {"points": "Points", "rebounds": "Rebounds", "assists": "Assists", "ppg": "Per game"} %}
 
 {% block body %}
-<div class="page-header">
-  <h1>Leaderboard</h1>
-  <form method="GET" class="page-header__actions">
-    <select name="metric" data-autosubmit aria-label="Metric">
-      {% for key, label in metrics.items() %}
-        <option value="{{ key }}" {% if key == metric %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-    <noscript><button type="submit" class="btn">Show</button></noscript>
-  </form>
+<div class="page-head">
+  <div>
+    <h1>Leaderboard</h1>
+    <p class="lede">The top ten, from every stat line players have recorded.</p>
+  </div>
 </div>
 
-<div class="grid grid--2">
-  <div class="card card--flush">
-    <div class="card__head"><h3>{{ metric_label }}</h3></div>
-    {% if rows %}
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>#</th><th>Player</th><th class="numeric">{{ metric_label }}</th><th class="numeric">Games</th></tr></thead>
-        <tbody>
-          {% for row in rows %}
-          <tr>
-            <td class="muted">{{ loop.index }}</td>
-            <td><a href="{{ url_for('profiles.detail', user_id=row.user_id) }}">{{ row.username }}</a></td>
-            <td class="numeric"><strong>{{ row.value }}</strong></td>
-            <td class="numeric muted">{{ row.games }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div class="empty"><p>No stats recorded yet.</p></div>
-    {% endif %}
-  </div>
+<nav class="segmented page-tabs" aria-label="Rank by">
+  {% for key, label in metrics.items() %}
+    <a href="{{ url_for('leaderboard.index', metric=key) }}" title="{{ label }}"
+       {% if key == metric %}aria-current="page"{% endif %}>{{ short_labels.get(key, label) }}</a>
+  {% endfor %}
+</nav>
 
-  <div class="card card--flush">
-    <div class="card__head"><h3>Highest rated</h3></div>
-    {% if rated %}
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>#</th><th>Player</th><th class="numeric">Rating</th><th class="numeric">Votes</th></tr></thead>
-        <tbody>
-          {% for row in rated %}
-          <tr>
-            <td class="muted">{{ loop.index }}</td>
-            <td><a href="{{ url_for('profiles.detail', user_id=row.user_id) }}">{{ row.username }}</a></td>
-            <td class="numeric"><strong>{{ row.value }}</strong><span class="muted">/5</span></td>
-            <td class="numeric muted">{{ row.ratings }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+<div class="grid grid--2">
+  <section aria-labelledby="metric-title">
+    <h2 id="metric-title" class="section__title section__title--spaced">{{ metric_label }}</h2>
+    {% if rows %}
+    <ol class="ranking list-card">
+      {% for row in rows %}
+      <li class="rank">
+        <span class="rank__pos">{{ loop.index }}</span>
+        {{ avatar(row.username) }}
+        <div class="rank__body">
+          <a class="rank__name" href="{{ url_for('profiles.detail', user_id=row.user_id) }}">{{ row.username }}</a>
+          <span class="rank__sub">{{ row.games }} {{ "game" if row.games == 1 else "games" }}</span>
+        </div>
+        <span class="rank__value">{{ "%g" | format(row.value) }}</span>
+      </li>
+      {% endfor %}
+    </ol>
     {% else %}
-    <div class="empty"><p>Nobody has enough ratings yet.</p></div>
+    <div class="empty empty--boxed"><p>No stats recorded yet.</p></div>
     {% endif %}
-  </div>
+  </section>
+
+  <section aria-labelledby="rated-title">
+    <h2 id="rated-title" class="section__title section__title--spaced">Highest rated</h2>
+    {% if rated %}
+    <ol class="ranking list-card">
+      {% for row in rated %}
+      <li class="rank">
+        <span class="rank__pos">{{ loop.index }}</span>
+        {{ avatar(row.username) }}
+        <div class="rank__body">
+          <a class="rank__name" href="{{ url_for('profiles.detail', user_id=row.user_id) }}">{{ row.username }}</a>
+          <span class="rank__sub">{{ row.ratings }} {{ "rating" if row.ratings == 1 else "ratings" }}</span>
+        </div>
+        <span class="rank__value">{{ "%g" | format(row.value) }}<span class="muted">/5</span></span>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <div class="empty empty--boxed"><p>Nobody has enough ratings yet.</p></div>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

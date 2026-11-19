@@ -27,7 +27,12 @@
     Object.keys(fields).forEach(function (key) {
       var node = dialog.querySelector('[data-field="' + key + '"]');
       if (!node) return;
-      if (node.tagName === "INPUT" || node.tagName === "SELECT" || node.tagName === "TEXTAREA") {
+      if (node.tagName === "FIELDSET") {
+        // A radio group: check the matching option, or none for a new rating.
+        Array.prototype.forEach.call(node.querySelectorAll('input[type="radio"]'), function (radio) {
+          radio.checked = radio.value === String(fields[key]);
+        });
+      } else if (node.tagName === "INPUT" || node.tagName === "SELECT" || node.tagName === "TEXTAREA") {
         node.value = fields[key];
       } else {
         node.textContent = fields[key];
@@ -57,6 +62,11 @@
     if (closer) {
       var owner = closer.closest("dialog");
       if (owner) owner.close();
+      return;
     }
+
+    // A click on the backdrop lands on the <dialog> itself; its content sits
+    // in an inner element, so this never fires for a click inside the form.
+    if (event.target.tagName === "DIALOG" && event.target.open) event.target.close();
   });
 })();

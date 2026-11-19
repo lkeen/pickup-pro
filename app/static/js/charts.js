@@ -20,19 +20,23 @@
   if (!data.games || data.games.length < 2) return;
 
   /* Read colours from the stylesheet so the charts follow the theme, including
-   * dark mode, instead of hardcoding a second palette. */
+   * dark mode, instead of hardcoding a second palette. The interface is
+   * monochrome, so series are told apart by shade and line style. */
   var styles = getComputedStyle(document.documentElement);
   function token(name, fallback) {
     return (styles.getPropertyValue(name) || "").trim() || fallback;
   }
 
-  var accent = token("--color-accent", "#d4581f");
-  var text = token("--color-text-muted", "#6b635b");
-  var grid = token("--color-border", "#e3ded7");
+  var ink = token("--ink", "#0b0b0b");
+  var muted = token("--muted", "#666666");
+  var faint = token("--faint", "#a3a3a3");
+  var grid = token("--line", "#ebebeb");
 
-  Chart.defaults.color = text;
+  Chart.defaults.color = muted;
   Chart.defaults.borderColor = grid;
   Chart.defaults.font.family = token("--font-sans", "system-ui, sans-serif");
+  Chart.defaults.plugins.legend.labels.usePointStyle = true;
+  Chart.defaults.plugins.legend.labels.boxHeight = 6;
 
   var common = {
     responsive: true,
@@ -51,9 +55,9 @@
       data: {
         labels: data.games.map(function (g) { return g.date; }),
         datasets: [
-          series("Points", data.games.map(function (g) { return g.points; }), accent),
-          series("Rebounds", data.games.map(function (g) { return g.rebounds; }), token("--color-success", "#1f7a4d")),
-          series("Assists", data.games.map(function (g) { return g.assists; }), text)
+          series("Points", data.games.map(function (g) { return g.points; }), ink, []),
+          series("Rebounds", data.games.map(function (g) { return g.rebounds; }), muted, []),
+          series("Assists", data.games.map(function (g) { return g.assists; }), faint, [4, 4])
         ]
       },
       options: common
@@ -69,20 +73,22 @@
         datasets: [{
           label: "Ratings received",
           data: data.ratings,
-          backgroundColor: accent,
-          borderRadius: 4
+          backgroundColor: ink,
+          borderRadius: 4,
+          maxBarThickness: 40
         }]
       },
       options: Object.assign({}, common, { plugins: { legend: { display: false } } })
     });
   }
 
-  function series(label, values, color) {
+  function series(label, values, color, dash) {
     return {
       label: label,
       data: values,
       borderColor: color,
       backgroundColor: color,
+      borderDash: dash,
       tension: 0.3,
       pointRadius: 3,
       borderWidth: 2

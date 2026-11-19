@@ -1,6 +1,7 @@
 """Game listing, creation, roster management and detail."""
 
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -10,6 +11,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.forms import ConfirmForm, GameForm, RatingForm, StatsForm
 from app.models import Court, Game, GamePlayer, PlayerRating, PlayerStats
+from app.services import listings
 from app.services.aggregates import all_courts_brief
 from app.services.geo import invalidate_area
 from app.timeutils import local_day, utcnow, viewer_timezone
@@ -59,7 +61,6 @@ def index():
         # Carried into the pager links so paging does not drop the filters.
         filters={key: value for key, value in request.args.items() if key != "page"},
         courts=all_courts_brief(),
-        confirm_form=ConfirmForm(),
     )
 
 
@@ -94,7 +95,7 @@ def create():
 def join(game_id):
     if not ConfirmForm().validate_on_submit():
         flash("Could not verify that request. Please try again.")
-        return redirect(url_for("games.index"))
+        return _redirect_back()
 
     # Lock the game row for the rest of the transaction. Two requests racing for
     # the last slot queue here instead of both reading "one slot left" and both
@@ -106,7 +107,7 @@ def join(game_id):
     if not game.can_join(current_user):
         db.session.rollback()
         flash("Cannot join this game (full or already joined).")
-        return redirect(url_for("games.index"))
+        return _redirect_back()
 
     db.session.add(GamePlayer(game_id=game_id, user_id=current_user.id))
     try:
@@ -117,11 +118,11 @@ def join(game_id):
         # the primary mechanism.
         db.session.rollback()
         flash("Cannot join this game (full or already joined).")
-        return redirect(url_for("games.index"))
+        return _redirect_back()
 
     _invalidate_searches_for(game)
     flash("Successfully joined the game!")
-    return redirect(url_for("games.index"))
+    return _redirect_back()
 
 
 @bp.route("/<int:game_id>/leave", methods=["POST"])
@@ -131,18 +132,40 @@ def leave(game_id):
 
     if not ConfirmForm().validate_on_submit():
         flash("Could not verify that request. Please try again.")
-        return redirect(url_for("games.index"))
+        return _redirect_back()
 
     membership = db.session.get(GamePlayer, (game_id, current_user.id))
     if membership is None:
         flash("You are not in this game.")
-        return redirect(url_for("games.index"))
+        return _redirect_back()
 
     db.session.delete(membership)
     db.session.commit()
     _invalidate_searches_for(game)
     flash("Successfully left the game!")
-    return redirect(url_for("games.index"))
+    return _redirect_back()
+
+
+@bp.route("/mine")
+@login_required
+def mine():
+    """Games the player hosts or has joined: what is next, then what they played.
+
+    Finished games are where stats and ratings get entered, so they are listed
+    here rather than left to a date filter.
+    """
+    pagination = db.paginate(
+        listings.my_past_query(current_user.id),
+        page=request.args.get("page", 1, type=int),
+        per_page=PAGE_SIZE,
+        error_out=False,
+    )
+    return render_template(
+        "my_games.html",
+        upcoming=listings.my_upcoming(current_user.id),
+        past=pagination.items,
+        pagination=pagination,
+    )
 
 
 @bp.route("/<int:game_id>")
@@ -165,11 +188,11 @@ def detail(game_id):
         "game_detail.html",
         game=game,
         is_rostered=current_user in game.players,
+        is_past=game.time < utcnow(),
         stats_dict={stat.user_id: stat for stat in stats},
         ratings_dict={rating.to_user_id: rating for rating in my_ratings},
         stats_form=StatsForm(),
         rating_form=RatingForm(),
-        confirm_form=ConfirmForm(),
     )
 
 
@@ -182,6 +205,28 @@ def _parse_date(raw):
         return datetime.strptime(raw, "%Y-%m-%d").date()  # noqa: DTZ007
     except ValueError:
         return None
+
+
+def _redirect_back():
+    """Return to the page the join or leave button was on.
+
+    Only a path on this site is followed. An absolute URL, a scheme-relative
+    //host, a backslash that browsers read as a slash, or a control character
+    that browsers strip before parsing would each turn the form into an open
+    redirect, so any of those falls back to the games list.
+    """
+    target = request.form.get("next", "")
+    parts = urlsplit(target)
+    if (
+        target.startswith("/")
+        and not target.startswith("//")
+        and "\\" not in target
+        and not any(ord(char) < 0x20 or ord(char) == 0x7F for char in target)
+        and not parts.scheme
+        and not parts.netloc
+    ):
+        return redirect(target)
+    return redirect(url_for("games.index"))
 
 
 def _invalidate_searches_for(game):

@@ -1,71 +1,37 @@
 {% extends "base.html" %}
-{% block title %}Courts — Pickup Pro{% endblock %}
-
-{% block scripts %}
-<script src="{{ url_for('static', filename='vendor/leaflet.js') }}"></script>
-<script src="{{ url_for('static', filename='js/map.js') }}" defer></script>
-{% endblock %}
-
-{% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet.css') }}">
-{% endblock %}
+{% from "_macros.html" import icon %}
+{% block title %}Courts - Pickup Pro{% endblock %}
 
 {% block body %}
-<div class="page-header">
-  <h1>Courts</h1>
-  <div class="page-header__actions">
-    <a href="{{ url_for('courts.create') }}" class="btn btn--primary">Add a court</a>
+<div class="page-head">
+  <div>
+    <h1>Courts</h1>
+    <p class="lede">{{ courts | length }} {{ "court" if courts | length == 1 else "courts" }}. Open one on the map to see its games.</p>
   </div>
-</div>
-
-<div class="card">
-  <div class="form-row u-mb-3">
-    <div class="form-row__action">
-      <button type="button" id="nearby-search" class="btn btn--primary">Find games near me</button>
-    </div>
-    <div>
-      <label for="nearby-radius">Radius — <span id="nearby-radius-label">10 km</span></label>
-      <input type="range" id="nearby-radius" min="1" max="100" step="1" value="10">
-    </div>
-  </div>
-
-  <div id="court-map" class="map-canvas"></div>
-
-  <p id="map-status" class="small muted u-mt-3"></p>
-  <div class="map-legend muted u-mt-2">
-    <span><i class="map-pin--court"></i> Court</span>
-    <span><i class="map-pin--game"></i> Has a game</span>
-    <span><i class="map-pin--you"></i> You</span>
-  </div>
-  <p class="small muted u-mt-2">
-    Click anywhere on the map to search from that point instead.
-  </p>
-
-  <div id="nearby-results" class="u-mt-4"></div>
+  <a href="{{ url_for('courts.create') }}" class="btn btn--primary">{{ icon("plus") }}Add a court</a>
 </div>
 
 {% if courts %}
-<div class="card card--flush u-mt-4">
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Name</th><th>Address</th><th></th></tr></thead>
-      <tbody>
-        {% for court in courts %}
-        <tr>
-          <td>{{ court.name }}</td>
-          <td class="muted">{{ court.address }}</td>
-          <td><a href="{{ url_for('games.index', court_id=court.id) }}" class="btn btn--small">View games</a></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+<ul class="court-list list-card">
+  {% for court in courts %}
+  {% set upcoming = counts.get(court.id, 0) %}
+  <li class="court">
+    <div class="court__body">
+      <a class="court__name" href="{{ url_for('home.index', court=court.id) }}">{{ court.name }}</a>
+      <p class="court__address">{{ court.address }}</p>
+    </div>
+    <span class="tag {{ 'tag--solid' if upcoming else 'tag--muted' }}">
+      {{ upcoming }} upcoming
+    </span>
+    <a class="btn btn--sm court__host" href="{{ url_for('games.create', court_id=court.id) }}">Host here</a>
+  </li>
+  {% endfor %}
+</ul>
 {% else %}
-<div class="card empty">
-  <h3>No courts yet</h3>
+<div class="empty empty--boxed">
+  <p class="empty__title">No courts yet</p>
   <p>Add the first one and start hosting.</p>
-  <a href="{{ url_for('courts.create') }}" class="btn btn--primary">Add a court</a>
+  <a href="{{ url_for('courts.create') }}" class="btn btn--primary btn--sm">{{ icon("plus") }}Add a court</a>
 </div>
 {% endif %}
 {% endblock %}

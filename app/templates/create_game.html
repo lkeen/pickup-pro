@@ -1,37 +1,48 @@
 {% extends "base.html" %}
-{% block title %}Host a game — Pickup Pro{% endblock %}
+{% from "_macros.html" import icon %}
+{% block title %}Host a game - Pickup Pro{% endblock %}
+{% block main_class %}page page--narrow{% endblock %}
+
+{# A court picked on the map arrives as ?court_id=; a re-rendered form keeps
+   whatever was submitted. #}
+{% set selected_court = form.court_id.data if form.court_id.data is not none else request.args.get('court_id') | int(default=none) %}
 
 {% block body %}
-<div class="auth-layout">
-  <div class="card">
-    <h1>Host a game</h1>
-    <p class="lede">Pick a court and a time; people can join from there.</p>
+<a class="backlink" href="{{ url_for('home.index', court=selected_court) if selected_court else url_for('home.index') }}">{{ icon("back") }}Back to the map</a>
 
-    <form method="POST" class="u-mt-5">
-      {{ form.hidden_tag() }}
-      <div class="field">
-        <label for="court_id">Court</label>
-        <select id="court_id" name="court_id" required>
-          <option value="">Select a court</option>
-          {% for value, label in form.court_id.choices %}
-            <option value="{{ value }}" {% if form.court_id.data == value %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-        {% for e in form.court_id.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
-      </div>
-      <div class="field">
-        <label for="time">Date and time</label>
-        <input type="datetime-local" id="time" name="time" value="{{ form.time._value() }}" required>
-        {% for e in form.time.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
-      </div>
-      <div class="field">
-        <label for="max_players">Max players</label>
-        <input type="number" id="max_players" name="max_players"
-               value="{{ form.max_players.data or 10 }}" min="2" max="20" required>
-        {% for e in form.max_players.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
-      </div>
-      <button type="submit" class="btn btn--primary btn--block">Create game</button>
-    </form>
-  </div>
+<div class="page-head page-head--stacked">
+  <h1>Host a game</h1>
+  <p class="lede">Pick a court and a time. Players nearby can join as soon as it is posted.</p>
 </div>
+
+<form method="POST" class="form-card">
+  {{ form.hidden_tag() }}
+  <div class="field">
+    <label for="court_id">Court</label>
+    <select id="court_id" name="court_id" required {% if form.court_id.errors %}aria-invalid="true"{% endif %}>
+      <option value="">Select a court</option>
+      {% for value, label in form.court_id.choices %}
+        <option value="{{ value }}" {% if selected_court == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    {% for e in form.court_id.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+    <span class="hint">Not listed? <a href="{{ url_for('courts.create') }}">Add a court</a></span>
+  </div>
+  <div class="field">
+    <label for="time">Date and time</label>
+    <input type="datetime-local" id="time" name="time" required
+           value="{{ form.time._value() }}"
+           {% if form.time.errors %}aria-invalid="true"{% endif %}>
+    {% for e in form.time.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+  </div>
+  <div class="field">
+    <label for="max_players">Max players</label>
+    <input type="number" id="max_players" name="max_players" inputmode="numeric"
+           value="{{ form.max_players.data or 10 }}" min="2" max="20" required
+           aria-describedby="max-players-hint" {% if form.max_players.errors %}aria-invalid="true"{% endif %}>
+    <span class="hint" id="max-players-hint">Between 2 and 20. Ten is a full five-on-five.</span>
+    {% for e in form.max_players.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+  </div>
+  <button type="submit" class="btn btn--primary btn--block btn--lg">Create game</button>
+</form>
 {% endblock %}

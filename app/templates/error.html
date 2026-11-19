@@ -1,10 +1,25 @@
 {% extends "base.html" %}
-{% block title %}{{ code }} — Pickup Pro{% endblock %}
+{% from "_macros.html" import brand_mark %}
+{% block title %}{{ code }} - Pickup Pro{% endblock %}
+{% block main_class %}page page--narrow error-page{% endblock %}
+
+{% set headlines = {
+  400: "That request did not make sense",
+  403: "That is not yours to change",
+  404: "Page not found",
+  405: "That does not work here",
+  429: "Slow down a little",
+  500: "Something went wrong",
+} %}
 
 {% block body %}
-<div class="card empty">
-  <h1>{{ code }}</h1>
-  <p class="lede">{{ message }}</p>
-  <a href="{{ url_for('auth.home') }}" class="btn btn--primary">Back to the start</a>
-</div>
+{% if not current_user.is_authenticated %}
+<a class="brand brand--lg" href="{{ url_for('auth.home') }}">{{ brand_mark() }}<span class="brand__name">Pickup Pro</span></a>
+{% endif %}
+<p class="error-page__code">{{ code }}</p>
+<h1 class="error-page__title">{{ headlines.get(code, "Something went wrong") }}</h1>
+<p class="lede">{{ message }}</p>
+<a href="{{ url_for('auth.home') }}" class="btn btn--primary">
+  {% if current_user.is_authenticated %}Back to the map{% else %}Back to the start{% endif %}
+</a>
 {% endblock %}

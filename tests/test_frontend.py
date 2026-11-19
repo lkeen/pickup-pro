@@ -41,21 +41,73 @@ class TestCourtsApi:
 
 
 class TestMapPage:
-    def test_the_courts_page_loads_leaflet_locally(self, db, login, user_factory):
+    @pytest.mark.parametrize("path", ["/dashboard", "/courts/create"])
+    def test_map_pages_load_leaflet_locally(self, db, login, user_factory, path):
         """Vendored, not from a CDN: the app works offline and does not depend
         on a third party staying up."""
         client = login(user_factory())
-        body = client.get("/courts").get_data(as_text=True)
+        body = client.get(path).get_data(as_text=True)
         assert "/static/vendor/leaflet.js" in body
         assert "/static/vendor/leaflet.css" in body
         assert "unpkg.com" not in body
         assert "cdn.jsdelivr.net" not in body
 
-    def test_the_map_container_is_present(self, db, login, user_factory):
+    def test_the_game_page_loads_leaflet_locally(self, db, login, user_factory, game_factory):
+        host = user_factory()
+        game = game_factory(host=host)
+        body = login(host).get(f"/games/{game.id}").get_data(as_text=True)
+        assert "/static/vendor/leaflet.js" in body
+        assert "/static/vendor/leaflet.css" in body
+
+    def test_the_map_is_the_home_page(self, db, login, user_factory):
         client = login(user_factory())
-        body = client.get("/courts").get_data(as_text=True)
+        body = client.get("/dashboard").get_data(as_text=True)
         assert 'id="court-map"' in body
+        assert 'data-map="home"' in body
         assert 'id="nearby-search"' in body
+        assert 'id="feed"' in body
+
+    def test_the_map_data_counts_upcoming_games_per_court(
+        self, db, login, user_factory, court_factory, game_factory
+    ):
+        """The markers show where games are, so a past game must not count."""
+        from datetime import timedelta
+
+        from app.timeutils import utcnow
+
+        host = user_factory()
+        busy = court_factory(name="Busy", created_by=host.id)
+        quiet = court_factory(name="Quiet", lat=34.0, created_by=host.id)
+        game_factory(court=busy, host=host)
+        game_factory(court=busy, host=host)
+        game_factory(court=quiet, host=host, when=utcnow() - timedelta(days=1))
+
+        body = login(host).get("/dashboard").get_data(as_text=True)
+        match = re.search(
+            r'<script type="application/json" id="map-data">(.*?)</script>', body, re.S
+        )
+        assert match, "map payload not found"
+        courts = {court["name"]: court for court in json.loads(match.group(1))["courts"]}
+        assert courts["Busy"]["upcoming"] == 2
+        assert courts["Quiet"]["upcoming"] == 0
+        assert {"lat", "lng", "address", "id"} <= set(courts["Busy"])
+
+    def test_the_game_page_maps_its_court(
+        self, db, login, user_factory, court_factory, game_factory
+    ):
+        host = user_factory()
+        court = court_factory(lat=33.9519, lng=-83.3576, created_by=host.id)
+        game = game_factory(court=court, host=host)
+        body = login(host).get(f"/games/{game.id}").get_data(as_text=True)
+        assert 'data-map="point"' in body
+        assert 'data-lat="33.9519"' in body
+        assert 'data-lng="-83.3576"' in body
+
+    def test_the_court_form_has_a_pin_picker(self, db, login, user_factory):
+        body = login(user_factory()).get("/courts/create").get_data(as_text=True)
+        assert 'data-map="picker"' in body
+        assert 'data-lat-input="lat"' in body
+        assert 'data-lng-input="lng"' in body
 
 
 class TestChartData:
@@ -147,7 +199,7 @@ class TestChartData:
 class TestVendoredAssets:
     @pytest.mark.parametrize(
         "path", ["vendor/leaflet.js", "vendor/leaflet.css", "vendor/chart.umd.js",
-                 "js/map.js", "js/charts.js", "js/modals.js", "css/main.css"]
+                 "js/map.js", "js/charts.js", "js/modals.js", "js/ui.js", "css/main.css"]
     )
     def test_static_assets_are_served(self, client, app, path):
         response = client.get(f"/static/{path}")

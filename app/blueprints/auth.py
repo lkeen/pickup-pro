@@ -1,4 +1,4 @@
-"""Password authentication and the logged-in landing page."""
+"""Password authentication: the signed-out landing page, log in, register, log out."""
 
 from flask import Blueprint, redirect, render_template, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
@@ -33,7 +33,7 @@ def _find_by_username(username):
 @bp.route("/")
 def home():
     if current_user.is_authenticated:
-        return redirect(url_for("auth.dashboard"))
+        return redirect(url_for("home.index"))
     return _render_landing()
 
 
@@ -51,7 +51,7 @@ def login():
         check_password_hash(_DUMMY_HASH, form.password.data)
     elif user.check_password(form.password.data):
         _start_authenticated_session(user)
-        return redirect(url_for("auth.dashboard"))
+        return redirect(url_for("home.index"))
 
     # Identical whether the username exists or the password is wrong, so the
     # response cannot be used to enumerate accounts.
@@ -85,15 +85,7 @@ def register():
         return _render_landing(register_form=form, error="Those details are already registered.")
 
     _start_authenticated_session(new_user)
-    return redirect(url_for("auth.dashboard"))
-
-
-@bp.route("/dashboard")
-@login_required
-def dashboard():
-    return render_template(
-        "dashboard.html", username=current_user.username, logout_form=ConfirmForm()
-    )
+    return redirect(url_for("home.index"))
 
 
 @bp.route("/logout", methods=["POST"])
@@ -102,7 +94,7 @@ def logout():
     # POST, not GET: a GET logout can be fired by any page embedding
     # <img src="/logout">.
     if not ConfirmForm().validate_on_submit():
-        return redirect(url_for("auth.dashboard"))
+        return redirect(url_for("home.index"))
     logout_user()
     return redirect(url_for("auth.home"))
 
