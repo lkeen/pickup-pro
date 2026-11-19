@@ -1,14 +1,14 @@
-"""Application configuration.
-
-One class per environment, selected at runtime by ``create_app``. Anything that
-differs between a laptop, a test run and production belongs here rather than
-being read from ``os.getenv`` at the point of use.
-"""
+"""Per-environment configuration, selected at runtime by ``create_app``."""
 
 import os
+from datetime import timedelta
 
-# Secrets that ship in example files and tutorials. If one of these ever reaches
-# production it means the real key was never set, so treat it as unset.
+from dotenv import load_dotenv
+
+# Loaded here rather than in the factory because the classes below read
+# os.getenv at definition time, which happens on import.
+load_dotenv()
+
 PLACEHOLDER_SECRETS = frozenset(
     {
         "",
@@ -18,6 +18,15 @@ PLACEHOLDER_SECRETS = frozenset(
         "your-secret-key-here",
     }
 )
+
+DEFAULT_REDIS_URL = "redis://localhost:6379/0"
+
+
+def _int_env(name, default):
+    try:
+        return int(os.getenv(name, default))
+    except ValueError:
+        return default
 
 
 class ConfigError(RuntimeError):
@@ -29,18 +38,63 @@ class BaseConfig:
 
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    # Recycle connections that the database closed underneath us; without this a
-    # container restart surfaces as a 500 on the next request.
-    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        # Without pre-ping, a database restart surfaces as a 500 on the next
+        # request that picks up a dead pooled connection.
+        "pool_pre_ping": True,
+        "pool_recycle": 1800,
+        # Sized per worker process: the ceiling is
+        # (pool_size + max_overflow) x gunicorn workers, which has to stay under
+        # the server's max_connections.
+        "pool_size": _int_env("DB_POOL_SIZE", 5),
+        "max_overflow": _int_env("DB_MAX_OVERFLOW", 5),
+        "pool_timeout": 10,
+    }
 
-    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    SESSION_COOKIE_NAME = "pickup_session"
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_SECURE = False
+    PERMANENT_SESSION_LIFETIME = timedelta(days=7)
+
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SECURE = False
+    REMEMBER_COOKIE_DURATION = timedelta(days=14)
+
+    # The token is bound to the session, so its useful lifetime is the session's.
+    # The one-hour default instead rejects a form left open over lunch.
+    WTF_CSRF_TIME_LIMIT = None
+
+    CACHE_TYPE = "RedisCache"
+    CACHE_REDIS_URL = os.getenv("REDIS_URL", DEFAULT_REDIS_URL)
+    CACHE_KEY_PREFIX = "pickup:"
+    CACHE_DEFAULT_TIMEOUT = 120
+
+    # Redis-backed, not in-memory: in-memory storage is per-process, so with
+    # several workers the limiter only ever sees a fraction of the traffic.
+    RATELIMIT_STORAGE_URI = os.getenv("REDIS_URL", DEFAULT_REDIS_URL)
+    RATELIMIT_HEADERS_ENABLED = True
+    # A ceiling for every route, so an expensive endpoint is never free. Routes
+    # that need something tighter declare it themselves.
+    RATELIMIT_DEFAULT = "300 per minute; 5000 per hour"
+
+    # Number of reverse proxies in front of the app. Zero means the app is
+    # exposed directly and client-supplied X-Forwarded-* headers are ignored.
+    TRUSTED_PROXY_HOPS = _int_env("TRUSTED_PROXY_HOPS", 0)
+
+    # Wall-clock times are read and shown in the browser's own zone, which it
+    # reports; this is the fallback when it has not, such as with JavaScript
+    # off. Everything is stored in UTC.
+    APP_TIMEZONE = os.getenv("APP_TIMEZONE", "UTC")
+
+    REDIS_URL = os.getenv("REDIS_URL", DEFAULT_REDIS_URL)
 
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
     @classmethod
     def validate(cls):
-        """Fail fast on an unusable environment. Overridden where it matters."""
         if not cls.SQLALCHEMY_DATABASE_URI:
             raise ConfigError("DATABASE_URL is not set.")
 
@@ -52,8 +106,18 @@ class DevelopmentConfig(BaseConfig):
 class TestingConfig(BaseConfig):
     TESTING = True
     DEBUG = False
-    # Tests run against a real PostgreSQL database, not SQLite: the spatial
-    # queries this project is built around have no SQLite equivalent.
+    # Off by default so tests exercise application logic rather than token
+    # plumbing; the CSRF regression tests turn it back on explicitly.
+    WTF_CSRF_ENABLED = False
+    # Left enabled so Flask-Limiter still builds its storage backend. The
+    # fixtures switch the limiter off at runtime instead, because shared limits
+    # would make the suite order-dependent.
+    RATELIMIT_ENABLED = True
+    RATELIMIT_DEFAULT = None
+    CACHE_REDIS_URL = os.getenv("TEST_REDIS_URL", "redis://localhost:6379/15")
+    RATELIMIT_STORAGE_URI = os.getenv("TEST_REDIS_URL", "redis://localhost:6379/15")
+    # A real PostgreSQL database: the spatial queries this app is built around
+    # have no SQLite equivalent.
     SQLALCHEMY_DATABASE_URI = os.getenv("TEST_DATABASE_URL") or (
         f"{os.getenv('DATABASE_URL', '')}_test" if os.getenv("DATABASE_URL") else None
     )
@@ -61,6 +125,11 @@ class TestingConfig(BaseConfig):
 
 class ProductionConfig(BaseConfig):
     DEBUG = False
+    SESSION_COOKIE_SECURE = True
+    REMEMBER_COOKIE_SECURE = True
+    PREFERRED_URL_SCHEME = "https"
+    HSTS_SECONDS = _int_env("HSTS_SECONDS", 31536000)
+    TRUSTED_PROXY_HOPS = _int_env("TRUSTED_PROXY_HOPS", 1)
 
     @classmethod
     def validate(cls):
@@ -83,7 +152,6 @@ DEFAULT_CONFIG = "development"
 
 
 def get_config(name=None):
-    """Resolve a config class by name, falling back to the environment."""
     name = (name or os.getenv("APP_ENV") or os.getenv("FLASK_ENV") or DEFAULT_CONFIG).lower()
     try:
         return _CONFIGS[name]

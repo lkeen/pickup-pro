@@ -1,0 +1,105 @@
+{# The map panel's contents. Rendered inside the home page, and alone by
+   /dashboard/feed when the map changes scope. #}
+{% from "_macros.html" import icon, game_item with context %}
+
+{% if mode == "all" %}
+<section class="feed__mine" aria-labelledby="mine-title">
+  <header class="feed__head">
+    <h1 id="mine-title" class="feed__title">Your games</h1>
+    {% if mine.upcoming %}
+      <p class="feed__meta">
+        {{ mine.upcoming | length }} coming up
+      </p>
+    {% endif %}
+  </header>
+
+  {% if mine.upcoming or mine.played %}
+    {% if mine.upcoming %}
+      <ul class="game-list feed__list">
+        {% for game in mine.upcoming[:mine.shown] %}
+          {{ game_item(game, panel_url, actions=false, compact=true) }}
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="feed__note">Nothing booked. <a href="{{ url_for('games.index') }}" data-near-me>Find a game near you</a> or <a href="{{ url_for('games.create') }}">host one</a>.</p>
+    {% endif %}
+
+    {% if mine.played %}
+      <p class="feed__label">Played</p>
+      <ul class="game-list feed__list">
+        {% for game in mine.played %}
+          {{ game_item(game, panel_url, actions=false, compact=true) }}
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <p class="feed__more">
+      <a href="{{ url_for('games.mine') }}">
+        {% if mine.upcoming | length > mine.shown %}See all {{ mine.upcoming | length }} coming up{% else %}All your games{% endif %}{{ icon("arrow") }}
+      </a>
+    </p>
+  {% else %}
+    <div class="empty feed__empty">
+      <p class="empty__title">No games yet</p>
+      <p>Join a game nearby or host your own. It will show up here.</p>
+      <div class="empty__actions">
+        <a class="btn btn--primary btn--sm" href="{{ url_for('games.index') }}" data-near-me>{{ icon("locate") }}Find a game</a>
+        <a class="btn btn--sm" href="{{ url_for('games.create') }}">{{ icon("plus") }}Host a game</a>
+      </div>
+    </div>
+  {% endif %}
+</section>
+{% endif %}
+
+<section aria-labelledby="feed-title">
+<header class="feed__head{% if mode == 'all' %} feed__head--section{% endif %}">
+  {% if mode == "court" %}
+    <a class="feed__back" href="{{ url_for('home.index') }}" data-feed-link>{{ icon("back") }}All games</a>
+    <h1 id="feed-title" class="feed__title">{{ court.name }}</h1>
+    <p class="feed__meta">{{ icon("pin") }}{{ court.address }}</p>
+    <div class="feed__actions">
+      <a class="btn btn--primary btn--sm" href="{{ url_for('games.create', court_id=court.id) }}">{{ icon("plus") }}Host a game here</a>
+    </div>
+  {% elif mode == "near" %}
+    <a class="feed__back" href="{{ url_for('home.index') }}" data-feed-link>{{ icon("back") }}All games</a>
+    <h1 id="feed-title" class="feed__title">Games nearby</h1>
+    <p class="feed__meta">
+      {{ games | length }} {{ "game" if games | length == 1 else "games" }} within {{ "%g" | format(search.radius) }} km
+    </p>
+  {% else %}
+    <h2 id="feed-title" class="feed__title">Upcoming games</h2>
+    <p class="feed__meta">Pick a court on the map, or find games near you.</p>
+  {% endif %}
+</header>
+
+{% if games %}
+  <ul class="game-list feed__list">
+    {% for game, distance in games %}
+      {{ game_item(game, panel_url, distance=distance) }}
+    {% endfor %}
+  </ul>
+{% else %}
+  <div class="empty feed__empty">
+    {% if mode == "court" %}
+      <p class="empty__title">No games here yet</p>
+      <p>Host the first one and it shows up for everyone nearby.</p>
+    {% elif mode == "near" %}
+      <p class="empty__title">Nothing in range</p>
+      <p>Try a wider radius, or move the map and search that area.</p>
+    {% else %}
+      <p class="empty__title">No games coming up</p>
+      <p>Be the first to host one.</p>
+      <a class="btn btn--primary btn--sm" href="{{ url_for('games.create') }}">{{ icon("plus") }}Host a game</a>
+    {% endif %}
+  </div>
+{% endif %}
+
+<footer class="feed__foot">
+  {% if mode == "court" %}
+    <a href="{{ url_for('games.index', court_id=court.id) }}">All upcoming games here{{ icon("arrow") }}</a>
+  {% else %}
+    <a href="{{ url_for('games.index') }}">All games{{ icon("arrow") }}</a>
+    <a href="{{ url_for('courts.index') }}">Courts{{ icon("arrow") }}</a>
+  {% endif %}
+</footer>
+</section>

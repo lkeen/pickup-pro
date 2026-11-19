@@ -1,19 +1,50 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Map - Pickup Pro{% endblock %}
+{% block body_class %}layout-app{% endblock %}
+{% block main_class %}home{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet.css') }}">
+{% endblock %}
+
 {% block body %}
-<div class="container">
-  <h1>Welcome, {{ username }}!</h1>
+<section class="home__panel" aria-label="Games">
+  <div class="panel__bar">
+    <button type="button" id="nearby-search" class="btn btn--sm">{{ icon("locate") }}Near me</button>
+    <label class="select-inline">
+      <span class="visually-hidden">Search radius</span>
+      <select id="nearby-radius" class="select--sm">
+        {% for km in radius_choices %}
+          <option value="{{ km }}" {% if (search and search.radius == km) or (not search and km == 10) %}selected{% endif %}>within {{ km }} km</option>
+        {% endfor %}
+        {% if search and search.radius not in radius_choices %}
+          <option value="{{ '%g' | format(search.radius) }}" data-custom selected>within {{ '%g' | format(search.radius) }} km</option>
+        {% endif %}
+      </select>
+    </label>
+  </div>
+  <p id="map-status" class="panel__status" role="status"></p>
 
-  <nav>
-    <h2>Navigation</h2>
-    <ul>
-      <li><a href="{{ url_for('user_profile', user_id=current_user.id) }}">My Profile & Stats</a></li>
-      <li><a href="{{ url_for('courts') }}">View Courts</a></li>
-      <li><a href="{{ url_for('create_court') }}">Create New Court</a></li>
-      <li><a href="{{ url_for('games') }}">View Games</a></li>
-      <li><a href="{{ url_for('create_game') }}">Create New Game</a></li>
-    </ul>
-  </nav>
+  <div id="feed" class="feed" aria-live="polite">
+    {% include "_feed.html" %}
+  </div>
+</section>
 
-  <a href="{{ url_for('logout') }}" class="btn btn-logout">Logout</a>
-</div>
+<section class="home__map" aria-label="Map of courts">
+  <div id="court-map" class="map" data-map="home"></div>
+  <button type="button" id="search-area" class="btn btn--sm map-float" hidden>{{ icon("search") }}Search this area</button>
+  <div class="map-legend" aria-hidden="true">
+    <span><i class="legend-dot legend-dot--games"></i>Games coming up</span>
+    <span><i class="legend-dot"></i>Court</span>
+  </div>
+  <noscript><p class="map-noscript">The map needs JavaScript. The list of games works without it.</p></noscript>
+</section>
+
+<script type="application/json" id="map-data">{{ map_data | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/leaflet.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/map.js') }}" defer></script>
 {% endblock %}

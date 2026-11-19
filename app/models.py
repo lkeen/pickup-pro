@@ -1,24 +1,52 @@
-from datetime import datetime
-from app.extensions import db
-from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
+from geoalchemy2 import Geography
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from app.extensions import db
+from app.timeutils import utcnow
+
 
 class User(UserMixin, db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key = True)
     username = db.Column(db.String(64), unique = True, nullable = False)
-    password_hash = db.Column(db.String(255), unique = False, nullable = False)
+    # Nullable: an account created through Google has no password at all.
+    password_hash = db.Column(db.String(255), unique = False, nullable = True)
     email = db.Column(db.String(254), unique = True, nullable = False)
-    created_at = db.Column(db.DateTime, default = datetime.now)
+    email_verified = db.Column(
+        db.Boolean, nullable = False, default = False, server_default = db.text("false")
+    )
+    # The provider's stable subject identifier, not the email: people change
+    # their email address and the subject is what actually identifies them.
+    oauth_provider = db.Column(db.String(32))
+    oauth_sub = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime(timezone = True), default = utcnow)
 
     courts = db.relationship('Court', backref='creator', lazy=True)
     hosted_games = db.relationship('Game', backref='host', lazy=True)
     games = db.relationship('Game', secondary='game_players', back_populates='players')
 
+    __table_args__ = (
+        db.UniqueConstraint('oauth_provider', 'oauth_sub', name='unique_oauth_identity'),
+        # Every account must keep at least one way to authenticate, or a bug
+        # could leave a row nobody can log into and nothing would notice.
+        db.CheckConstraint(
+            'password_hash IS NOT NULL '
+            'OR (oauth_provider IS NOT NULL AND oauth_sub IS NOT NULL)',
+            name='user_has_a_credential',
+        ),
+    )
+
+    @property
+    def has_password(self):
+        return self.password_hash is not None
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
+        if not self.password_hash:
+            return False
         return check_password_hash(self.password_hash, password)
 
 class Court(db.Model):
@@ -28,21 +56,61 @@ class Court(db.Model):
     address = db.Column(db.String(120), nullable = False)
     lat = db.Column(db.Float, nullable = False)
     lng = db.Column(db.Float, nullable = False)
+    # Derived by PostgreSQL from lat/lng, never written by the application: a
+    # generated column cannot drift the way a trigger-maintained one can, and it
+    # holds for write paths that bypass the ORM. geography rather than geometry
+    # so distances come out in metres on the spheroid.
+    #
+    # spatial_index=False because GeoAlchemy2 would otherwise create the GiST
+    # index through a DDL event; a migration creates it CONCURRENTLY instead.
+    geog = db.Column(
+        Geography(geometry_type = "POINT", srid = 4326, spatial_index = False),
+        db.Computed("ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography", persisted = True),
+        nullable = False,
+    )
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable = False)
-    created_at = db.Column(db.DateTime, default = datetime.now)
+    created_at = db.Column(db.DateTime(timezone = True), default = utcnow)
 
     games = db.relationship('Game', backref='court', lazy=True)
+
+    # Created in migrations, declared here so `flask db check` sees them and
+    # autogenerate does not propose dropping them.
+    __table_args__ = (
+        db.Index('ix_courts_geog', 'geog', postgresql_using='gist'),
+        db.Index('ix_courts_created_by', 'created_by'),
+        # Rounded to ~11 m: two people entering one court will not agree to the
+        # last float digit, and duplicates split a court's games across rows
+        # nobody sees together.
+        db.Index(
+            'uq_courts_name_location',
+            db.text('lower(name)'),
+            db.text('round(lat::numeric, 4)'),
+            db.text('round(lng::numeric, 4)'),
+            unique = True,
+        ),
+    )
 
 class Game(db.Model):
     __tablename__ = "games"
     id = db.Column(db.Integer, primary_key = True)
     court_id = db.Column(db.Integer, db.ForeignKey("courts.id"), nullable = False)
     host_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable = False)
-    time = db.Column(db.DateTime, nullable = False)
+    # An instant in UTC. The wall-clock time a host typed is interpreted in
+    # APP_TIMEZONE on the way in and rendered back in it.
+    time = db.Column(db.DateTime(timezone = True), nullable = False)
     max_players = db.Column(db.Integer, default = 10)
-    created_at = db.Column(db.DateTime, default = datetime.now)
+    created_at = db.Column(db.DateTime(timezone = True), default = utcnow)
 
     players = db.relationship('User', secondary='game_players', back_populates='games')
+
+    __table_args__ = (
+        db.Index('ix_games_court_id', 'court_id'),
+        db.Index('ix_games_host_id', 'host_id'),
+        db.Index('ix_games_time', 'time'),
+        # Serves "games at this court on this day" with one index rather than
+        # two lookups intersected.
+        db.Index('ix_games_court_id_time', 'court_id', 'time'),
+    )
 
     @property
     def current_players(self):
@@ -60,7 +128,13 @@ class GamePlayer(db.Model):
     __tablename__ = "game_players"
     game_id = db.Column(db.Integer, db.ForeignKey("games.id"), primary_key = True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key = True)
-    joined_at = db.Column(db.DateTime, default = datetime.now)
+    joined_at = db.Column(db.DateTime(timezone = True), default = utcnow)
+
+    __table_args__ = (
+        # game_id leads the composite primary key; user_id does not, so "which
+        # games is this user in" would have no index to use.
+        db.Index('ix_game_players_user_id', 'user_id'),
+    )
 
 class PlayerStats(db.Model):
     __tablename__ = "player_stats"
@@ -70,13 +144,18 @@ class PlayerStats(db.Model):
     points = db.Column(db.Integer, default = 0)
     rebounds = db.Column(db.Integer, default = 0)
     assists = db.Column(db.Integer, default = 0)
-    created_at = db.Column(db.DateTime, default = datetime.now)
-    updated_at = db.Column(db.DateTime, default = datetime.now, onupdate = datetime.now)
+    created_at = db.Column(db.DateTime(timezone = True), default = utcnow)
+    updated_at = db.Column(db.DateTime(timezone = True), default = utcnow, onupdate = utcnow)
 
     game = db.relationship('Game', backref='player_stats')
     user = db.relationship('User', backref='player_stats')
 
-    __table_args__ = (db.UniqueConstraint('game_id', 'user_id', name='unique_game_user_stats'),)
+    __table_args__ = (
+        db.UniqueConstraint('game_id', 'user_id', name='unique_game_user_stats'),
+        # The unique constraint's index leads with game_id, so profile
+        # aggregations filtering on user_id alone cannot use it.
+        db.Index('ix_player_stats_user_id', 'user_id'),
+    )
 
 class PlayerRating(db.Model):
     __tablename__ = "player_ratings"
@@ -86,14 +165,20 @@ class PlayerRating(db.Model):
     game_id = db.Column(db.Integer, db.ForeignKey("games.id"), nullable = False)
     rating = db.Column(db.Integer, nullable = False)
     comment = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default = datetime.now)
+    created_at = db.Column(db.DateTime(timezone = True), default = utcnow)
 
     game = db.relationship('Game', backref='player_ratings')
     from_user = db.relationship('User', foreign_keys=[from_user_id], backref='ratings_given')
     to_user = db.relationship('User', foreign_keys=[to_user_id], backref='ratings_received')
 
     __table_args__ = (
-        db.UniqueConstraint('from_user_id', 'to_user_id', 'game_id', name='unique_game_user_rating'),
+        db.UniqueConstraint(
+            'from_user_id', 'to_user_id', 'game_id', name='unique_game_user_rating'
+        ),
+        # The unique index leads with from_user_id, so neither "ratings for this
+        # game" nor "ratings received by this user" can use it.
+        db.Index('ix_player_ratings_game_id', 'game_id'),
+        db.Index('ix_player_ratings_to_user_id', 'to_user_id'),
         db.CheckConstraint('rating >= 1 AND rating <= 5', name='rating_range'),
         db.CheckConstraint('from_user_id != to_user_id', name='no_self_rating')
     )

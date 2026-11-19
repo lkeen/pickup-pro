@@ -1,9 +1,8 @@
 import logging
 from logging.config import fileConfig
 
-from flask import current_app
-
 from alembic import context
+from flask import current_app
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -17,11 +16,11 @@ logger = logging.getLogger('alembic.env')
 
 def get_engine():
     try:
-        # this works with Flask-SQLAlchemy<3 and Alchemical
-        return current_app.extensions['migrate'].db.get_engine()
-    except (TypeError, AttributeError):
         # this works with Flask-SQLAlchemy>=3
         return current_app.extensions['migrate'].db.engine
+    except (TypeError, AttributeError):
+        # this works with Flask-SQLAlchemy<3 and Alchemical
+        return current_app.extensions['migrate'].db.get_engine()
 
 
 def get_engine_url():
@@ -45,6 +44,28 @@ target_db = current_app.extensions['migrate'].db
 # ... etc.
 
 
+# Tables and indexes PostGIS creates and manages itself. They are not part of
+# this application's schema, so autogenerate must not try to drop them --
+# without this filter, `flask db migrate` proposes removing spatial_ref_sys on
+# every run.
+POSTGIS_MANAGED_TABLES = {
+    'spatial_ref_sys',
+    'geography_columns',
+    'geometry_columns',
+    'raster_columns',
+    'raster_overviews',
+}
+
+
+def include_object(object_, name, type_, reflected, compare_to):
+    if type_ == 'table' and name in POSTGIS_MANAGED_TABLES:
+        return False
+    # PostGIS creates its own indexes on those tables too.
+    if type_ == 'index' and getattr(object_.table, 'name', None) in POSTGIS_MANAGED_TABLES:
+        return False
+    return True
+
+
 def get_metadata():
     if hasattr(target_db, 'metadatas'):
         return target_db.metadatas[None]
@@ -65,7 +86,10 @@ def run_migrations_offline():
     """
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url, target_metadata=get_metadata(), literal_binds=True
+        url=url,
+        target_metadata=get_metadata(),
+        literal_binds=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -93,6 +117,7 @@ def run_migrations_online():
     conf_args = current_app.extensions['migrate'].configure_args
     if conf_args.get("process_revision_directives") is None:
         conf_args["process_revision_directives"] = process_revision_directives
+    conf_args.setdefault("include_object", include_object)
 
     connectable = get_engine()
 

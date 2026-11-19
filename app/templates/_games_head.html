@@ -1,0 +1,13 @@
+{# Title and the switch between every game and the player's own. #}
+{% from "_macros.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>Games</h1>
+  </div>
+  <a href="{{ url_for('games.create') }}" class="btn btn--primary">{{ icon("plus") }}Host a game</a>
+</div>
+
+<nav class="segmented page-tabs" aria-label="Which games">
+  <a href="{{ url_for('games.mine') }}" {% if request.endpoint == 'games.mine' %}aria-current="page"{% endif %}>My games</a>
+  <a href="{{ url_for('games.index') }}" {% if request.endpoint == 'games.index' %}aria-current="page"{% endif %}>All upcoming</a>
+</nav>

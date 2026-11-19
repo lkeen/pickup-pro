@@ -1,77 +1,57 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon, game_item with context %}
+{% block title %}Games - Pickup Pro{% endblock %}
+
+{% set here = request.full_path.rstrip("?") %}
 
 {% block body %}
-<h1>Basketball Games</h1>
+{% include "_games_head.html" %}
 
-{% with messages = get_flashed_messages() %}
-    {% if messages %}
-        <div class="messages">
-            {% for message in messages %}
-                <div class="alert">{{ message }}</div>
-            {% endfor %}
-        </div>
-    {% endif %}
-{% endwith %}
-
-<a href="{{ url_for('create_game') }}">Create New Game</a>
-<a href="{{ url_for('courts') }}">View Courts</a>
-<a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
-
-<h2>Filter Games</h2>
-<form method="GET">
-    <select name="court_id">
-        <option value="">All Courts</option>
-        {% for court in courts %}
-            <option value="{{ court.id }}" {% if request.args.get('court_id') == court.id|string %}selected{% endif %}>
-                {{ court.name }}
-            </option>
-        {% endfor %}
+<form method="GET" class="filters" aria-label="Filter games">
+  <div class="field">
+    <label for="filter-court">Court</label>
+    <select id="filter-court" name="court_id">
+      <option value="">All courts</option>
+      {% for court in courts %}
+        <option value="{{ court.id }}" {% if request.args.get('court_id') == court.id|string %}selected{% endif %}>{{ court.name }}</option>
+      {% endfor %}
     </select>
-
-    <input type="date" name="date" value="{{ request.args.get('date', '') }}">
-
-    <button type="submit">Filter</button>
-    <a href="{{ url_for('games') }}">Clear Filters</a>
+  </div>
+  <div class="field">
+    <label for="filter-date">Date</label>
+    <input type="date" id="filter-date" name="date" value="{{ request.args.get('date', '') }}">
+  </div>
+  <div class="filters__actions">
+    <button type="submit" class="btn">Apply</button>
+    {% if request.args.get('court_id') or request.args.get('date') %}
+      <a href="{{ url_for('games.index') }}" class="btn btn--ghost">Clear</a>
+    {% endif %}
+  </div>
 </form>
 
-<h2>Available Games</h2>
 {% if games %}
-    <table>
-        <thead>
-            <tr>
-                <th>Court</th>
-                <th>Date/Time</th>
-                <th>Host</th>
-                <th>Players</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for game in games %}
-            <tr>
-                <td>{{ game.court.name }}</td>
-                <td>{{ game.time.strftime('%Y-%m-%d %H:%M') }}</td>
-                <td>{{ game.host.username }}</td>
-                <td>{{ game.current_players }}/{{ game.max_players }}</td>
-                <td>
-                    <a href="{{ url_for('game_detail', game_id=game.id) }}">View Details</a>
-                    {% if current_user in game.players %}
-                        <form method="POST" action="{{ url_for('leave_game', game_id=game.id) }}" style="display: inline;">
-                            <button type="submit">Leave Game</button>
-                        </form>
-                    {% elif game.can_join(current_user) %}
-                        <form method="POST" action="{{ url_for('join_game', game_id=game.id) }}" style="display: inline;">
-                            <button type="submit">Join Game</button>
-                        </form>
-                    {% else %}
-                        <span>Full</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<ul class="game-list list-card">
+  {% for game in games %}
+    {{ game_item(game, here) }}
+  {% endfor %}
+</ul>
+
+{% if pagination.pages > 1 %}
+<nav class="pager" aria-label="Pagination">
+  {% if pagination.has_prev %}
+    <a class="btn btn--sm" href="{{ url_for('games.index', page=pagination.prev_num, **filters) }}">{{ icon("back") }}Previous</a>
+  {% else %}<span></span>{% endif %}
+  <span class="pager__status">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+  {% if pagination.has_next %}
+    <a class="btn btn--sm" href="{{ url_for('games.index', page=pagination.next_num, **filters) }}">Next{{ icon("arrow") }}</a>
+  {% else %}<span></span>{% endif %}
+</nav>
+{% endif %}
 {% else %}
-    <p>No games available. <a href="{{ url_for('create_game') }}">Create the first one!</a></p>
+<div class="empty empty--boxed">
+  <p class="empty__title">No games to show</p>
+  <p>Nothing upcoming matches those filters. Pick a date to look further back.</p>
+  <a href="{{ url_for('games.create') }}" class="btn btn--primary btn--sm">{{ icon("plus") }}Host a game</a>
+</div>
 {% endif %}
 {% endblock %}

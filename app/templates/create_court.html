@@ -1,41 +1,67 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Add a court - Pickup Pro{% endblock %}
+{% block main_class %}page page--narrow{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet.css') }}">
+{% endblock %}
 
 {% block body %}
-<h1>Create New Court</h1>
+<a class="backlink" href="{{ url_for('home.index') }}">{{ icon("back") }}Back to the map</a>
 
-{% with messages = get_flashed_messages() %}
-    {% if messages %}
-        <div class="messages">
-            {% for message in messages %}
-                <div class="alert">{{ message }}</div>
-            {% endfor %}
-        </div>
-    {% endif %}
-{% endwith %}
+<div class="page-head page-head--stacked">
+  <h1>Add a court</h1>
+  <p class="lede">Drop a pin where the court is, then give it a name.</p>
+</div>
 
-<form method="POST">
-    <div>
-        <label for="name">Court Name:</label>
-        <input type="text" id="name" name="name" required>
+<form method="POST" class="form-card">
+  {{ form.hidden_tag() }}
+
+  <div class="field">
+    <span class="label" id="picker-label">Location</span>
+    <div class="picker map" data-map="picker" data-lat-input="lat" data-lng-input="lng"
+         role="application" aria-labelledby="picker-label" aria-describedby="picker-hint"></div>
+    <div class="picker__bar">
+      <span class="hint" id="picker-hint">Click the map to place the pin, then drag it to adjust.</span>
+      <button type="button" class="btn btn--sm" data-picker-locate>{{ icon("locate") }}Use my location</button>
     </div>
+  </div>
 
-    <div>
-        <label for="address">Address:</label>
-        <input type="text" id="address" name="address" required>
+  <div class="field-row">
+    <div class="field">
+      <label for="lat">Latitude</label>
+      <input type="number" step="any" id="lat" name="lat" inputmode="decimal"
+             value="{{ form.lat.data if form.lat.data is not none else '' }}" required
+             {% if form.lat.errors %}aria-invalid="true"{% endif %}>
+      {% for e in form.lat.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
     </div>
-
-    <div>
-        <label for="lat">Latitude:</label>
-        <input type="number" step="any" id="lat" name="lat" required>
+    <div class="field">
+      <label for="lng">Longitude</label>
+      <input type="number" step="any" id="lng" name="lng" inputmode="decimal"
+             value="{{ form.lng.data if form.lng.data is not none else '' }}" required
+             {% if form.lng.errors %}aria-invalid="true"{% endif %}>
+      {% for e in form.lng.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
     </div>
+  </div>
 
-    <div>
-        <label for="lng">Longitude:</label>
-        <input type="number" step="any" id="lng" name="lng" required>
-    </div>
-
-    <button type="submit">Create Court</button>
+  <div class="field">
+    <label for="name">Court name</label>
+    <input type="text" id="name" name="name" value="{{ form.name.data or '' }}" maxlength="64" required
+           {% if form.name.errors %}aria-invalid="true"{% endif %}>
+    {% for e in form.name.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+  </div>
+  <div class="field">
+    <label for="address">Address</label>
+    <input type="text" id="address" name="address" value="{{ form.address.data or '' }}" maxlength="120"
+           autocomplete="street-address" required {% if form.address.errors %}aria-invalid="true"{% endif %}>
+    {% for e in form.address.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+  </div>
+  <button type="submit" class="btn btn--primary btn--block btn--lg">Add court</button>
 </form>
+{% endblock %}
 
-<a href="{{ url_for('courts') }}">Back to Courts</a>
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/leaflet.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/map.js') }}" defer></script>
 {% endblock %}

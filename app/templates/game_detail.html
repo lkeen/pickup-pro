@@ -1,165 +1,170 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon, avatar, roster_form, roster_meter %}
+{% block title %}{{ game.court.name }} - Pickup Pro{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet.css') }}">
+{% endblock %}
+
+{% set here = url_for('games.detail', game_id=game.id) %}
 
 {% block body %}
-<h1>Game Details</h1>
+<a class="backlink" href="{{ url_for('home.index', court=game.court_id) }}">{{ icon("back") }}Back to the map</a>
 
-{% with messages = get_flashed_messages() %}
-    {% if messages %}
-        <div class="messages">
-            {% for message in messages %}
-                <div class="alert">{{ message }}</div>
-            {% endfor %}
-        </div>
+<div class="detail">
+  <section class="detail__main">
+    <p class="eyebrow">{% if is_past %}Played{% else %}{{ game.time | relday }}{% endif %}</p>
+    <h1 class="detail__title">{{ game.court.name }}</h1>
+    <p class="detail__line">{{ icon("clock") }}{{ game.time | localtime }}</p>
+    <p class="detail__line">{{ icon("pin") }}{{ game.court.address }}</p>
+    <p class="detail__line">
+      {{ avatar(game.host.username, "xs") }}Hosted by
+      <a href="{{ url_for('profiles.detail', user_id=game.host_id) }}">{{ game.host.username }}</a>
+    </p>
+
+    <div class="join-card">
+      {{ roster_meter(game) }}
+      {% if is_rostered %}
+        <p class="join-card__state"><span class="tag tag--solid">{{ icon("check") }}You're in</span></p>
+        {{ roster_form("games.leave", game, here, "Leave game", "btn--block") }}
+      {% elif game.can_join(current_user) %}
+        {{ roster_form("games.join", game, here, "Join game", "btn--primary btn--block btn--lg") }}
+      {% else %}
+        <p class="join-card__state muted">This game is full.</p>
+      {% endif %}
+    </div>
+
+    <div class="minimap map" data-map="point"
+         data-lat="{{ game.court.lat }}" data-lng="{{ game.court.lng }}"
+         role="img" aria-label="Map showing {{ game.court.name }}"></div>
+  </section>
+
+  <section class="detail__roster" aria-labelledby="roster-title">
+    <div class="section__head">
+      <h2 id="roster-title" class="section__title">Roster</h2>
+      <span class="muted small">{{ game.current_players }} of {{ game.max_players }}</span>
+    </div>
+    {% if not is_rostered %}
+      <p class="hint">Join this game to record stats and rate players.</p>
     {% endif %}
-{% endwith %}
 
-<a href="{{ url_for('games') }}">Back to Games</a>
+    {% if game.players %}
+    <ul class="people">
+      {% for player in game.players %}
+      {% set stat = stats_dict.get(player.id) %}
+      {% set rating = ratings_dict.get(player.id) %}
+      {% set is_me = player.id == current_user.id %}
+      <li class="person">
+        {{ avatar(player.username) }}
+        <div class="person__body">
+          <p class="person__name">
+            <a href="{{ url_for('profiles.detail', user_id=player.id) }}">{{ player.username }}</a>
+            {% if is_me %}<span class="tag">You</span>{% endif %}
+            {% if player.id == game.host_id %}<span class="tag">Host</span>{% endif %}
+          </p>
+          {% if is_rostered %}
+          <p class="person__meta dots">
+            {% if stat %}
+              <span>{{ stat.points }} {{ "pt" if stat.points == 1 else "pts" }}</span><span>{{ stat.rebounds }} reb</span><span>{{ stat.assists }} ast</span>
+            {% else %}
+              <span>No stats yet</span>
+            {% endif %}
+            {% if rating %}<span>You rated {{ rating.rating }}/5</span>{% endif %}
+          </p>
+          {% endif %}
+        </div>
+        {% if is_rostered %}
+        <div class="person__actions">
+          <button type="button" class="btn btn--sm"
+                  data-open-dialog="stats"
+                  data-user-id="{{ player.id }}"
+                  data-player-name="{{ player.username }}"
+                  data-points="{{ stat.points if stat else 0 }}"
+                  data-rebounds="{{ stat.rebounds if stat else 0 }}"
+                  data-assists="{{ stat.assists if stat else 0 }}">
+            {% if is_me %}My stats{% else %}Stats{% endif %}
+          </button>
+          {% if not is_me %}
+          <button type="button" class="btn btn--sm"
+                  data-open-dialog="rating"
+                  data-user-id="{{ player.id }}"
+                  data-player-name="{{ player.username }}"
+                  data-rating="{{ rating.rating if rating else '' }}"
+                  data-comment="{{ rating.comment if rating and rating.comment else '' }}">
+            Rate
+          </button>
+          {% endif %}
+        </div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty empty--boxed">
+      <p class="empty__title">Nobody has joined yet</p>
+      <p>Be the first on the roster.</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
 
-<h2>Game Information</h2>
-<table>
-    <tr><td><strong>Court:</strong></td><td>{{ game.court.name }}</td></tr>
-    <tr><td><strong>Address:</strong></td><td>{{ game.court.address }}</td></tr>
-    <tr><td><strong>Date/Time:</strong></td><td>{{ game.time.strftime('%Y-%m-%d %H:%M') }}</td></tr>
-    <tr><td><strong>Host:</strong></td><td>{{ game.host.username }}</td></tr>
-    <tr><td><strong>Players:</strong></td><td>{{ game.current_players }}/{{ game.max_players }}</td></tr>
-</table>
-
-<h2>Roster</h2>
-{% if game.players %}
-    <table>
-        <thead>
-            <tr>
-                <th>Player</th>
-                {% if is_rostered %}
-                    <th>Points</th>
-                    <th>Rebounds</th>
-                    <th>Assists</th>
-                    <th>Your Rating</th>
-                    <th>Actions</th>
-                {% endif %}
-            </tr>
-        </thead>
-        <tbody>
-            {% for player in game.players %}
-            <tr>
-                <td><a href="{{ url_for('user_profile', user_id=player.id) }}">{{ player.username }}</a></td>
-                {% if is_rostered %}
-                    <td>{{ stats_dict.get(player.id).points if stats_dict.get(player.id) else 0 }}</td>
-                    <td>{{ stats_dict.get(player.id).rebounds if stats_dict.get(player.id) else 0 }}</td>
-                    <td>{{ stats_dict.get(player.id).assists if stats_dict.get(player.id) else 0 }}</td>
-                    <td>
-                        {% if ratings_dict.get(player.id) %}
-                            {{ ratings_dict.get(player.id).rating }}/5
-                        {% elif player.id != current_user.id %}
-                            Not rated
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if player.id != current_user.id %}
-                            <button onclick="openStatsModal({{ player.id }}, '{{ player.username }}', {{ stats_dict.get(player.id).points if stats_dict.get(player.id) else 0 }}, {{ stats_dict.get(player.id).rebounds if stats_dict.get(player.id) else 0 }}, {{ stats_dict.get(player.id).assists if stats_dict.get(player.id) else 0 }})">Update Stats</button>
-                            <button onclick="openRatingModal({{ player.id }}, '{{ player.username }}', {{ ratings_dict.get(player.id).rating if ratings_dict.get(player.id) else 0 }}, '{{ ratings_dict.get(player.id).comment if ratings_dict.get(player.id) else '' }}')">Rate Player</button>
-                        {% else %}
-                            <button onclick="openStatsModal({{ player.id }}, '{{ player.username }}', {{ stats_dict.get(player.id).points if stats_dict.get(player.id) else 0 }}, {{ stats_dict.get(player.id).rebounds if stats_dict.get(player.id) else 0 }}, {{ stats_dict.get(player.id).assists if stats_dict.get(player.id) else 0 }})">Update My Stats</button>
-                        {% endif %}
-                    </td>
-                {% endif %}
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-{% else %}
-    <p>No players have joined this game yet.</p>
-{% endif %}
-
-{% if not is_rostered %}
-    <p><em>You must be rostered to submit stats and rate players.</em></p>
-{% endif %}
-
-<!-- Stats Modal -->
 {% if is_rostered %}
-<div id="statsModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border:1px solid #ccc; z-index:1000;">
-    <h3>Update Stats for <span id="statsPlayerName"></span></h3>
-    <form method="POST" action="{{ url_for('submit_stats', game_id=game.id) }}">
-        <input type="hidden" id="statsUserId" name="user_id">
-
-        <label>Points:</label>
-        <input type="number" id="statsPoints" name="points" min="0" value="0"><br><br>
-
-        <label>Rebounds:</label>
-        <input type="number" id="statsRebounds" name="rebounds" min="0" value="0"><br><br>
-
-        <label>Assists:</label>
-        <input type="number" id="statsAssists" name="assists" min="0" value="0"><br><br>
-
-        <button type="submit">Save Stats</button>
-        <button type="button" onclick="closeStatsModal()">Cancel</button>
+<dialog data-dialog="stats" class="dialog" aria-labelledby="stats-title">
+  <div class="dialog__body">
+    <h2 id="stats-title" class="dialog__title">Stats for <span data-field="playerName"></span></h2>
+    <form method="POST" action="{{ url_for('stats.submit_stats', game_id=game.id) }}">
+      {{ stats_form.hidden_tag() }}
+      <input type="hidden" name="user_id" data-field="userId">
+      <div class="stat-inputs">
+        <div class="field"><label for="d-points">Points</label>
+          <input type="number" id="d-points" name="points" min="0" value="0" inputmode="numeric" data-field="points"></div>
+        <div class="field"><label for="d-rebounds">Rebounds</label>
+          <input type="number" id="d-rebounds" name="rebounds" min="0" value="0" inputmode="numeric" data-field="rebounds"></div>
+        <div class="field"><label for="d-assists">Assists</label>
+          <input type="number" id="d-assists" name="assists" min="0" value="0" inputmode="numeric" data-field="assists"></div>
+      </div>
+      <div class="dialog__actions">
+        <button type="button" class="btn" data-close-dialog>Cancel</button>
+        <button type="submit" class="btn btn--primary">Save stats</button>
+      </div>
     </form>
-</div>
+  </div>
+</dialog>
 
-<!-- Rating Modal -->
-<div id="ratingModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border:1px solid #ccc; z-index:1000;">
-    <h3>Rate <span id="ratingPlayerName"></span></h3>
-    <form method="POST" action="{{ url_for('submit_rating', game_id=game.id) }}">
-        <input type="hidden" id="ratingUserId" name="to_user_id">
-
-        <label>Rating (1-5):</label>
-        <select id="ratingScore" name="rating" required>
-            <option value="">Select rating</option>
-            <option value="1">1 - Poor</option>
-            <option value="2">2 - Below Average</option>
-            <option value="3">3 - Average</option>
-            <option value="4">4 - Good</option>
-            <option value="5">5 - Excellent</option>
-        </select><br><br>
-
-        <label>Comment (optional):</label><br>
-        <textarea id="ratingComment" name="comment" rows="3" cols="50"></textarea><br><br>
-
-        <button type="submit">Save Rating</button>
-        <button type="button" onclick="closeRatingModal()">Cancel</button>
+<dialog data-dialog="rating" class="dialog" aria-labelledby="rating-title">
+  <div class="dialog__body">
+    <h2 id="rating-title" class="dialog__title">Rate <span data-field="playerName"></span></h2>
+    <form method="POST" action="{{ url_for('stats.submit_rating', game_id=game.id) }}">
+      {{ rating_form.hidden_tag() }}
+      <input type="hidden" name="to_user_id" data-field="userId">
+      <fieldset class="rating-scale" data-field="rating">
+        <legend>How did they play?</legend>
+        <div class="rating-scale__options">
+          {% for value, label in [(1, "Poor"), (2, "Below average"), (3, "Average"), (4, "Good"), (5, "Excellent")] %}
+            <input type="radio" id="d-rating-{{ value }}" name="rating" value="{{ value }}" required>
+            <label for="d-rating-{{ value }}" title="{{ label }}"><span>{{ value }}</span><span class="visually-hidden"> - {{ label }}</span></label>
+          {% endfor %}
+        </div>
+        <p class="rating-scale__ends" aria-hidden="true"><span>Poor</span><span>Excellent</span></p>
+      </fieldset>
+      <div class="field">
+        <label for="d-comment">Comment <span class="muted">(optional)</span></label>
+        <textarea id="d-comment" name="comment" rows="3" maxlength="1000" data-field="comment"></textarea>
+      </div>
+      <div class="dialog__actions">
+        <button type="button" class="btn" data-close-dialog>Cancel</button>
+        <button type="submit" class="btn btn--primary">Save rating</button>
+      </div>
     </form>
-</div>
-
-<!-- Modal Overlay -->
-<div id="modalOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999;" onclick="closeModals()"></div>
-
-<script>
-function openStatsModal(userId, username, points, rebounds, assists) {
-    document.getElementById('statsUserId').value = userId;
-    document.getElementById('statsPlayerName').textContent = username;
-    document.getElementById('statsPoints').value = points;
-    document.getElementById('statsRebounds').value = rebounds;
-    document.getElementById('statsAssists').value = assists;
-    document.getElementById('statsModal').style.display = 'block';
-    document.getElementById('modalOverlay').style.display = 'block';
-}
-
-function openRatingModal(userId, username, rating, comment) {
-    document.getElementById('ratingUserId').value = userId;
-    document.getElementById('ratingPlayerName').textContent = username;
-    document.getElementById('ratingScore').value = rating || '';
-    document.getElementById('ratingComment').value = comment || '';
-    document.getElementById('ratingModal').style.display = 'block';
-    document.getElementById('modalOverlay').style.display = 'block';
-}
-
-function closeStatsModal() {
-    document.getElementById('statsModal').style.display = 'none';
-    document.getElementById('modalOverlay').style.display = 'none';
-}
-
-function closeRatingModal() {
-    document.getElementById('ratingModal').style.display = 'none';
-    document.getElementById('modalOverlay').style.display = 'none';
-}
-
-function closeModals() {
-    closeStatsModal();
-    closeRatingModal();
-}
-</script>
+  </div>
+</dialog>
 {% endif %}
+{% endblock %}
 
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/leaflet.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/map.js') }}" defer></script>
+{% if is_rostered %}
+<script src="{{ url_for('static', filename='js/modals.js') }}" defer></script>
+{% endif %}
 {% endblock %}

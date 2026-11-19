@@ -1,20 +1,99 @@
 {% extends "base.html" %}
+{% from "_macros.html" import brand_mark %}
+{% block title %}Pickup Pro - find a run near you{% endblock %}
+{% block main_class %}auth{% endblock %}
+
+{# A failed registration comes back with the sign-up tab still open. #}
+{% set show_register = request.endpoint == 'auth.register' %}
+
 {% block body %}
-<div class="container">
-  {% if error %}<p style="color:red">{{ error }}</p>{% endif %}
-  <h1>Welcome</h1>
-  <form id="auth-form" method="post" action="{{ url_for('login') }}">
-    <input type="text" name="username" placeholder="username" class="input-field" />
-    <input type="password" name="password" placeholder="password" class="input-field" />
-    <input type="submit" value="Login" class="btn btn-login" />
-    <button type="button" class="btn btn-login" onclick="switchToRegister()">Register</button>
-  </form>
-</div>
-<script>
-function switchToRegister(){
-  const form = document.getElementById("auth-form");
-  form.action = "{{ url_for('register') }}";
-  form.submit();
-}
-</script>
+<section class="auth__form">
+  <div class="auth__inner">
+    <p class="brand brand--lg">{{ brand_mark() }}<span class="brand__name">Pickup Pro</span></p>
+
+    <h1 class="auth__title">Find a run near you.</h1>
+    <p class="lede">Every court on one map. Join a game in a tap, or host your own.</p>
+
+    {# Field problems show beside their field; the banner is for the rest. #}
+    {% if error and not register_form.errors %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+
+    <div class="auth-tabs">
+      <input type="radio" name="auth-tab" id="tab-login" class="auth-tabs__radio" {% if not show_register %}checked{% endif %}>
+      <input type="radio" name="auth-tab" id="tab-register" class="auth-tabs__radio" {% if show_register %}checked{% endif %}>
+
+      <div class="segmented segmented--block auth-tabs__switch">
+        <label for="tab-login">Log in</label>
+        <label for="tab-register">Sign up</label>
+      </div>
+
+      <div class="auth-tabs__pane auth-tabs__pane--login">
+        <form method="post" action="{{ url_for('auth.login') }}">
+          {{ login_form.hidden_tag() }}
+          <div class="field">
+            <label for="login-username">Username</label>
+            <input type="text" id="login-username" name="username" autocomplete="username"
+                   value="{{ login_form.username.data or '' }}" required>
+          </div>
+          <div class="field">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" name="password" autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="btn btn--primary btn--block btn--lg">Log in</button>
+        </form>
+
+        {% if config.GOOGLE_OAUTH_READY %}
+          <p class="divider"><span>or</span></p>
+          <a href="{{ url_for('oauth.start') }}" class="btn btn--block btn--lg">Continue with Google</a>
+        {% endif %}
+      </div>
+
+      <div class="auth-tabs__pane auth-tabs__pane--register">
+        <h2 class="visually-hidden">Create an account</h2>
+        <form method="post" action="{{ url_for('auth.register') }}">
+          {{ register_form.hidden_tag() }}
+          <div class="field">
+            <label for="reg-username">Username</label>
+            <input type="text" id="reg-username" name="username" autocomplete="username"
+                   value="{{ register_form.username.data or '' }}" required
+                   {% if register_form.username.errors %}aria-invalid="true"{% endif %}>
+            {% for e in register_form.username.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+          </div>
+          <div class="field">
+            <label for="reg-email">Email</label>
+            <input type="email" id="reg-email" name="email" autocomplete="email"
+                   value="{{ register_form.email.data or '' }}" required
+                   {% if register_form.email.errors %}aria-invalid="true"{% endif %}>
+            {% for e in register_form.email.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+          </div>
+          <div class="field">
+            <label for="reg-password">Password</label>
+            <input type="password" id="reg-password" name="password" autocomplete="new-password"
+                   minlength="10" aria-describedby="reg-password-hint" required
+                   {% if register_form.password.errors %}aria-invalid="true"{% endif %}>
+            <span class="hint" id="reg-password-hint">At least 10 characters.</span>
+            {% for e in register_form.password.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+          </div>
+          <button type="submit" class="btn btn--primary btn--block btn--lg">Create an account</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<aside class="auth__art" aria-hidden="true">
+  {# Half a court, drawn to scale: 50 by 47 feet at ten units to the foot. #}
+  <svg class="court-art" viewBox="-20 -20 540 510" preserveAspectRatio="xMidYMid slice">
+    <g fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke">
+      <rect x="0" y="0" width="500" height="470"/>
+      <rect x="170" y="0" width="160" height="190"/>
+      <circle cx="250" cy="190" r="60"/>
+      <path d="M220 40h60"/>
+      <circle cx="250" cy="52.5" r="7.5"/>
+      <path d="M210 52.5a40 40 0 0 0 80 0"/>
+      <path d="M30 0v140a237.5 237.5 0 0 0 440 0V0"/>
+      <path d="M190 470a60 60 0 0 1 120 0"/>
+    </g>
+  </svg>
+  <p class="auth__art-caption">Pickup basketball, organised.</p>
+</aside>
 {% endblock %}

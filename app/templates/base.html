@@ -1,15 +1,78 @@
+{% from "_macros.html" import icon, avatar, brand_mark -%}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="">
-    <title>Flask Authentication</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Find pickup basketball games near you, host a run, and track what happened.">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0b0b0b" media="(prefers-color-scheme: dark)">
+    <title>{% block title %}Pickup Pro{% endblock %}</title>
+    {# Page stylesheets (Leaflet's) first, so the app's own rules win ties. #}
+    {% block head %}{% endblock %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='15' fill='%230b0b0b'/><path d='M1 16h30M16 1v30M6.2 4.6a16 16 0 0 1 0 22.8M25.8 4.6a16 16 0 0 0 0 22.8' stroke='white' fill='none' stroke-width='1.6'/></svg>">
+    <script src="{{ url_for('static', filename='js/ui.js') }}" defer></script>
 </head>
-<body>
-    <header>Pickup Pro</header>
-    {% block body%}
+<body class="{% if current_user.is_authenticated %}has-topbar {% endif %}{% block body_class %}{% endblock %}">
+    <a class="skip-link" href="#main">Skip to content</a>
 
-    {%  endblock %}
+    {% if current_user.is_authenticated %}
+    <header class="topbar">
+        <a class="brand" href="{{ url_for('home.index') }}">
+            {{ brand_mark() }}<span class="brand__name">Pickup Pro</span>
+        </a>
+        <nav class="topnav" aria-label="Main">
+            <a href="{{ url_for('home.index') }}" {% if request.endpoint == 'home.index' %}aria-current="page"{% endif %}>Map</a>
+            <a href="{{ url_for('games.mine') }}" {% if request.endpoint == 'games.mine' %}aria-current="page"{% endif %}>My games</a>
+        </nav>
+        <a class="btn btn--primary btn--sm topbar__host" href="{{ url_for('games.create') }}"
+           {% if request.endpoint == 'games.create' %}aria-current="page"{% endif %}>
+            {{ icon("plus") }}<span>Host<span class="topbar__host-more"> a game</span></span>
+        </a>
+        <details class="menu">
+            <summary class="menu__trigger" aria-label="Account menu for {{ current_user.username }}">
+                {{ avatar(current_user.username) }}
+            </summary>
+            <div class="menu__panel">
+                <p class="menu__who">
+                    <strong>{{ current_user.username }}</strong>
+                    <span>Signed in</span>
+                </p>
+                <a href="{{ url_for('profiles.detail', user_id=current_user.id) }}"
+                   {% if request.endpoint == 'profiles.detail' and request.view_args.user_id == current_user.id %}aria-current="page"{% endif %}>Your profile</a>
+                <a href="{{ url_for('leaderboard.index') }}" {% if request.endpoint == 'leaderboard.index' %}aria-current="page"{% endif %}>Leaderboard</a>
+                <hr>
+                <a href="{{ url_for('games.index') }}" {% if request.endpoint == 'games.index' %}aria-current="page"{% endif %}>All games</a>
+                <a href="{{ url_for('courts.index') }}" {% if request.endpoint == 'courts.index' %}aria-current="page"{% endif %}>Courts</a>
+                <a href="{{ url_for('courts.create') }}" {% if request.endpoint == 'courts.create' %}aria-current="page"{% endif %}>Add a court</a>
+                <hr>
+                <form method="POST" action="{{ url_for('auth.logout') }}">
+                    {{ csrf_field() }}
+                    <button type="submit">Log out</button>
+                </form>
+            </div>
+        </details>
+    </header>
+    {% endif %}
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="toasts" role="status">
+            {% for message in messages %}
+            <div class="toast">
+                <span>{{ message }}</span>
+                <button type="button" class="toast__close" data-dismiss aria-label="Dismiss">{{ icon("close") }}</button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    <main id="main" class="{% block main_class %}page{% endblock %}">
+        {% block body %}{% endblock %}
+    </main>
+    <script src="{{ url_for('static', filename='js/timezone.js') }}" defer></script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>

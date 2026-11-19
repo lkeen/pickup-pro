@@ -1,445 +1,227 @@
-# app/__init__.py
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-from datetime import datetime, timedelta
-from dotenv import load_dotenv
-from sqlalchemy import text
-from flask_login import login_user, logout_user, login_required, current_user
-from app.extensions import db, migrate, login_mgr
+"""Application factory. Routes live in ``app.blueprints``."""
 
-# Load environment variables first
-load_dotenv()
+from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 
+from app.extensions import cache, csrf, db, limiter, login_mgr, migrate, oauth
 from config import get_config
-from app.models import User, Court, Game, GamePlayer, PlayerStats, PlayerRating
-from app.utils import haversine_distance
+
 
 def create_app(config_name=None):
     app = Flask(__name__)
 
-    # Resolve and validate configuration before anything else touches it, so a
-    # missing DATABASE_URL or a placeholder SECRET_KEY fails at boot rather than
-    # on the first request that happens to need it.
+    # Resolved and validated before anything else touches it, so a missing
+    # DATABASE_URL or a placeholder SECRET_KEY fails at boot rather than on the
+    # first request that happens to need it.
     config_class = get_config(config_name)
     config_class.validate()
     app.config.from_object(config_class)
 
-    # Init extensions
+    from app.logging import configure as configure_logging
+
+    configure_logging(app)
+    trust_proxy_headers(app)
+    register_extensions(app)
+    register_template_helpers(app)
+    register_blueprints(app)
+    register_health_check(app)
+    register_security_headers(app)
+    register_error_handlers(app)
+
+    return app
+
+
+def trust_proxy_headers(app):
+    """Read the client's real address and scheme from X-Forwarded-* headers.
+
+    Only as many hops as are configured are trusted; the rest of each header is
+    discarded. Without this the app sees the proxy's address for every request,
+    which keys the whole internet into one rate-limit bucket and makes
+    ``url_for(_external=True)`` build http:// URLs behind a TLS terminator --
+    the OAuth redirect URI among them.
+    """
+    hops = app.config.get("TRUSTED_PROXY_HOPS", 0)
+    if hops > 0:
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app, x_for=hops, x_proto=hops, x_host=hops, x_prefix=hops
+        )
+
+
+def register_extensions(app):
     db.init_app(app)
     migrate.init_app(app, db)
     login_mgr.init_app(app)
+    csrf.init_app(app)
+    cache.init_app(app)
+    limiter.init_app(app)
+    oauth.init_app(app)
 
-    #Flask-Login wiring
+    from app.blueprints.oauth import register_google
+
+    app.config["GOOGLE_OAUTH_READY"] = register_google(app)
+
+    # Imported for the side effect of registering the models with SQLAlchemy's
+    # metadata, which is what Alembic autogenerate reads.
+    from app.models import User
+
     @login_mgr.user_loader
     def load_user(user_id: str):
-        # Flask-Login passes a string; convert to int for PK lookup
-        return User.query.get(int(user_id))
-
-    login_mgr.login_view = "home"  # redirect here when @login_required fails
-
-    #Routes
-    @app.route("/")
-    def home():
-        if current_user.is_authenticated:
-            return redirect(url_for("dashboard"))
-        return render_template("index.html")
-
-    @app.route("/login", methods=["POST"])
-    def login():
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        user = User.query.filter_by(username=username).first()
-        if user and user.check_password(password):
-            login_user(user)
-            return redirect(url_for("dashboard"))
-        return render_template("index.html", error="Invalid credentials.")
-
-    @app.route("/register", methods=["POST"])
-    def register():
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        if not username or not password:
-            return render_template("index.html", error="Username and password required.")
-        if User.query.filter_by(username=username).first():
-            return render_template("index.html", error="User already registered.")
-        #add email field to the form later; using placeholder for now
-        new_user = User(username=username, email=f"{username}@example.com")
-        new_user.set_password(password)
-        db.session.add(new_user)
-        db.session.commit()
-        login_user(new_user)
-        return redirect(url_for("dashboard"))
-
-    @app.route("/dashboard")
-    @login_required
-    def dashboard():
-        return render_template("dashboard.html", username=current_user.username)
-
-    @app.route("/logout")
-    @login_required
-    def logout():
-        logout_user()
-        return redirect(url_for("home"))
-
-    # Courts CRUD routes
-    @app.route("/courts")
-    @login_required
-    def courts():
-        courts = Court.query.all()
-        return render_template("courts.html", courts=courts)
-
-    @app.route("/courts/create", methods=["GET", "POST"])
-    @login_required
-    def create_court():
-        if request.method == "POST":
-            name = request.form.get("name", "").strip()
-            address = request.form.get("address", "").strip()
-            lat = request.form.get("lat")
-            lng = request.form.get("lng")
-
-            if not all([name, address, lat, lng]):
-                flash("All fields are required.")
-                return render_template("create_court.html")
-
-            try:
-                lat = float(lat)
-                lng = float(lng)
-            except ValueError:
-                flash("Invalid coordinates.")
-                return render_template("create_court.html")
-
-            court = Court(
-                name=name,
-                address=address,
-                lat=lat,
-                lng=lng,
-                created_by=current_user.id
-            )
-            db.session.add(court)
-            db.session.commit()
-            flash("Court created successfully!")
-            return redirect(url_for("courts"))
-
-        return render_template("create_court.html")
-
-    # Games CRUD routes
-    @app.route("/games")
-    @login_required
-    def games():
-        court_id = request.args.get("court_id")
-        date = request.args.get("date")
-
-        query = Game.query
-        if court_id:
-            query = query.filter_by(court_id=court_id)
-        if date:
-            try:
-                date_obj = datetime.strptime(date, "%Y-%m-%d").date()
-                query = query.filter(Game.time >= date_obj)
-                query = query.filter(Game.time < datetime.combine(date_obj, datetime.min.time()) + timedelta(days=1))
-            except ValueError:
-                pass
-
-        games = query.order_by(Game.time).all()
-        courts = Court.query.all()
-        return render_template("games.html", games=games, courts=courts)
-
-    # Nearby games search endpoint
-    @app.route("/games/nearby")
-    @login_required
-    def nearby_games():
-        lat = request.args.get("lat", type=float)
-        lng = request.args.get("lng", type=float)
-        radius = request.args.get("radius", default=10, type=float)  # default 10km
-        date = request.args.get("date")
-
-        if not lat or not lng:
-            return jsonify({"error": "Latitude and longitude are required"}), 400
-
-        # Get all upcoming games with their court info
-        query = db.session.query(Game, Court).join(Court, Game.court_id == Court.id)
-
-        # Filter by date if provided
-        if date:
-            try:
-                date_obj = datetime.strptime(date, "%Y-%m-%d").date()
-                query = query.filter(Game.time >= date_obj)
-                query = query.filter(Game.time < datetime.combine(date_obj, datetime.min.time()) + timedelta(days=1))
-            except ValueError:
-                pass
-        else:
-            # Default: only show future games
-            query = query.filter(Game.time >= datetime.now())
-
-        games_with_courts = query.order_by(Game.time).all()
-
-        # Calculate distance for each game and filter by radius
-        nearby = []
-        for game, court in games_with_courts:
-            distance = haversine_distance(lat, lng, court.lat, court.lng)
-            if distance <= radius:
-                nearby.append({
-                    "id": game.id,
-                    "court_id": court.id,
-                    "court_name": court.name,
-                    "court_address": court.address,
-                    "court_lat": court.lat,
-                    "court_lng": court.lng,
-                    "time": game.time.isoformat(),
-                    "max_players": game.max_players,
-                    "current_players": game.current_players,
-                    "spots_available": game.spots_available,
-                    "distance_km": round(distance, 2),
-                    "host_id": game.host_id
-                })
-
-        # Sort by distance
-        nearby.sort(key=lambda x: x["distance_km"])
-
-        return jsonify({"games": nearby, "count": len(nearby)})
-
-    @app.route("/games/create", methods=["GET", "POST"])
-    @login_required
-    def create_game():
-        if request.method == "POST":
-            court_id = request.form.get("court_id")
-            time = request.form.get("time")
-            max_players = request.form.get("max_players", 10)
-
-            if not all([court_id, time]):
-                flash("Court and time are required.")
-                return render_template("create_game.html", courts=Court.query.all())
-
-            try:
-                time_obj = datetime.strptime(time, "%Y-%m-%dT%H:%M")
-                max_players = int(max_players)
-            except ValueError:
-                flash("Invalid time or player count.")
-                return render_template("create_game.html", courts=Court.query.all())
-
-            game = Game(
-                court_id=court_id,
-                host_id=current_user.id,
-                time=time_obj,
-                max_players=max_players
-            )
-            db.session.add(game)
-            db.session.commit()
-            flash("Game created successfully!")
-            return redirect(url_for("games"))
-
-        courts = Court.query.all()
-        return render_template("create_game.html", courts=courts)
-
-    # Join/Leave game routes
-    @app.route("/games/<int:game_id>/join", methods=["POST"])
-    @login_required
-    def join_game(game_id):
-        game = Game.query.get_or_404(game_id)
-
-        if not game.can_join(current_user):
-            flash("Cannot join this game (full or already joined).")
-            return redirect(url_for("games"))
-
-        game_player = GamePlayer(game_id=game_id, user_id=current_user.id)
-        db.session.add(game_player)
-        db.session.commit()
-        flash("Successfully joined the game!")
-        return redirect(url_for("games"))
-
-    @app.route("/games/<int:game_id>/leave", methods=["POST"])
-    @login_required
-    def leave_game(game_id):
-        game = Game.query.get_or_404(game_id)
-
-        game_player = GamePlayer.query.filter_by(
-            game_id=game_id,
-            user_id=current_user.id
-        ).first()
-
-        if not game_player:
-            flash("You are not in this game.")
-            return redirect(url_for("games"))
-
-        db.session.delete(game_player)
-        db.session.commit()
-        flash("Successfully left the game!")
-        return redirect(url_for("games"))
-
-    # Game details with stats and ratings
-    @app.route("/games/<int:game_id>")
-    @login_required
-    def game_detail(game_id):
-        game = Game.query.get_or_404(game_id)
-        is_rostered = current_user in game.players
-
-        # Get current stats for this game
-        player_stats = PlayerStats.query.filter_by(game_id=game_id).all()
-        stats_dict = {stat.user_id: stat for stat in player_stats}
-
-        # Get current ratings for this game (that current user has given)
-        my_ratings = PlayerRating.query.filter_by(
-            game_id=game_id,
-            from_user_id=current_user.id
-        ).all()
-        ratings_dict = {rating.to_user_id: rating for rating in my_ratings}
-
-        return render_template("game_detail.html",
-                             game=game,
-                             is_rostered=is_rostered,
-                             stats_dict=stats_dict,
-                             ratings_dict=ratings_dict)
-
-    # Submit/update stats for a player in a game
-    @app.route("/games/<int:game_id>/stats", methods=["POST"])
-    @login_required
-    def submit_stats(game_id):
-        game = Game.query.get_or_404(game_id)
-
-        # Only rostered players can submit stats
-        if current_user not in game.players:
-            flash("Only rostered players can submit stats.")
-            return redirect(url_for("game_detail", game_id=game_id))
-
-        user_id = request.form.get("user_id")
-        points = request.form.get("points", 0)
-        rebounds = request.form.get("rebounds", 0)
-        assists = request.form.get("assists", 0)
-
         try:
-            user_id = int(user_id)
-            points = int(points) if points else 0
-            rebounds = int(rebounds) if rebounds else 0
-            assists = int(assists) if assists else 0
+            return db.session.get(User, int(user_id))
         except ValueError:
-            flash("Invalid stats values.")
-            return redirect(url_for("game_detail", game_id=game_id))
+            return None
 
-        # Check if stats already exist
-        existing_stats = PlayerStats.query.filter_by(
-            game_id=game_id,
-            user_id=user_id
-        ).first()
+    login_mgr.login_view = "auth.home"
+    # Ties the session to a hash of the client's address and user agent, so a
+    # lifted cookie is less portable.
+    login_mgr.session_protection = "strong"
 
-        if existing_stats:
-            existing_stats.points = points
-            existing_stats.rebounds = rebounds
-            existing_stats.assists = assists
-            existing_stats.updated_at = datetime.now()
-        else:
-            new_stats = PlayerStats(
-                game_id=game_id,
-                user_id=user_id,
-                points=points,
-                rebounds=rebounds,
-                assists=assists
-            )
-            db.session.add(new_stats)
 
-        db.session.commit()
-        flash("Stats updated successfully!")
-        return redirect(url_for("game_detail", game_id=game_id))
+def register_template_helpers(app):
+    from flask_wtf.csrf import generate_csrf
+    from markupsafe import Markup
 
-    # Submit/update rating for a player in a game
-    @app.route("/games/<int:game_id>/rate", methods=["POST"])
-    @login_required
-    def submit_rating(game_id):
-        game = Game.query.get_or_404(game_id)
+    @app.template_global()
+    def csrf_field():
+        """A CSRF input for templates with no form object of their own."""
+        return Markup(
+            f'<input type="hidden" name="csrf_token" value="{generate_csrf()}">'
+        )
 
-        # Only rostered players can rate
-        if current_user not in game.players:
-            flash("Only rostered players can rate others.")
-            return redirect(url_for("game_detail", game_id=game_id))
+    from app.timeutils import to_local, utcnow, viewer_timezone
 
-        to_user_id = request.form.get("to_user_id")
-        rating = request.form.get("rating")
-        comment = request.form.get("comment", "").strip()
+    @app.template_filter("localtime")
+    def localtime(value, fmt="%a %d %b, %H:%M %Z"):
+        """Render a stored UTC instant as wall-clock in the viewer's zone.
 
+        Labelled with the zone's abbreviation, since on a first visit, or with
+        JavaScript off, the zone is APP_TIMEZONE rather than the viewer's own.
+        """
+        if value is None:
+            return ""
+        return to_local(value, viewer_timezone()).strftime(fmt)
+
+    @app.template_filter("localdate")
+    def localdate(value, fmt="%Y-%m-%d"):
+        return localtime(value, fmt)
+
+    @app.template_filter("relday")
+    def relday(value):
+        """The viewer's calendar day for an instant, said the way people say it.
+
+        "Today", "Tomorrow" and "Yesterday" where they apply, otherwise a short
+        date such as "Sat 21 Nov". Built from parts because %-d, the unpadded
+        day, is not portable across platforms.
+        """
+        if value is None:
+            return ""
+        zone = viewer_timezone()
+        local = to_local(value, zone)
+        delta = (local.date() - to_local(utcnow(), zone).date()).days
+        named = {-1: "Yesterday", 0: "Today", 1: "Tomorrow"}
+        if delta in named:
+            return named[delta]
+        return f"{local:%a} {local.day} {local:%b}"
+
+
+def register_blueprints(app):
+    from app.blueprints import register_blueprints as _register
+    from app.cli import bp as cli_bp
+
+    _register(app)
+    app.register_blueprint(cli_bp)
+
+
+def register_health_check(app):
+    """Liveness for the container runtime and the load balancer.
+
+    Checks the database, not just that Python is running: a process that cannot
+    reach its database should not be sent traffic.
+    """
+    from sqlalchemy import text
+
+    @app.route("/healthz")
+    @limiter.exempt
+    def healthz():
         try:
-            to_user_id = int(to_user_id)
-            rating = int(rating)
-        except ValueError:
-            flash("Invalid rating values.")
-            return redirect(url_for("game_detail", game_id=game_id))
+            db.session.execute(text("SELECT 1"))
+        except Exception:
+            app.logger.exception("health check failed")
+            return {"status": "unhealthy"}, 503
+        return {"status": "ok"}
 
-        # Prevent self-rating
-        if to_user_id == current_user.id:
-            flash("You cannot rate yourself.")
-            return redirect(url_for("game_detail", game_id=game_id))
 
-        # Validate rating range
-        if rating < 1 or rating > 5:
-            flash("Rating must be between 1 and 5.")
-            return redirect(url_for("game_detail", game_id=game_id))
+# Map tiles come from OpenStreetMap; everything else is served from this
+# origin. No 'unsafe-inline' anywhere, which is only possible because no
+# template carries an inline script, style attribute or event handler.
+MAP_TILE_ORIGIN = "https://tile.openstreetmap.org"
 
-        # Check if rating already exists
-        existing_rating = PlayerRating.query.filter_by(
-            game_id=game_id,
-            from_user_id=current_user.id,
-            to_user_id=to_user_id
-        ).first()
+CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self'; "
+    f"img-src 'self' data: {MAP_TILE_ORIGIN}; "
+    "connect-src 'self'; "
+    "font-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'none'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
 
-        if existing_rating:
-            existing_rating.rating = rating
-            existing_rating.comment = comment
-        else:
-            new_rating = PlayerRating(
-                game_id=game_id,
-                from_user_id=current_user.id,
-                to_user_id=to_user_id,
-                rating=rating,
-                comment=comment
+SECURITY_HEADERS = {
+    "Content-Security-Policy": CSP,
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    # The map asks for the visitor's location; nothing else needs a device.
+    "Permissions-Policy": "geolocation=(self), camera=(), microphone=(), payment=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
+
+
+def register_security_headers(app):
+    hsts_seconds = app.config.get("HSTS_SECONDS")
+
+    @app.after_request
+    def _set_security_headers(response):
+        for header, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(header, value)
+        if hsts_seconds:
+            response.headers.setdefault(
+                "Strict-Transport-Security", f"max-age={hsts_seconds}; includeSubDomains"
             )
-            db.session.add(new_rating)
+        return response
 
-        db.session.commit()
-        flash("Rating submitted successfully!")
-        return redirect(url_for("game_detail", game_id=game_id))
 
-    # User profile with lifetime stats and ratings
-    @app.route("/users/<int:user_id>")
-    @login_required
-    def user_profile(user_id):
-        user = User.query.get_or_404(user_id)
+def register_error_handlers(app):
+    """Serve the app's own error pages, and JSON under /api.
 
-        # Calculate lifetime stats aggregations
-        stats_query = db.session.query(
-            db.func.count(PlayerStats.id).label('games_played'),
-            db.func.sum(PlayerStats.points).label('total_points'),
-            db.func.sum(PlayerStats.rebounds).label('total_rebounds'),
-            db.func.sum(PlayerStats.assists).label('total_assists'),
-            db.func.avg(PlayerStats.points).label('avg_points'),
-            db.func.avg(PlayerStats.rebounds).label('avg_rebounds'),
-            db.func.avg(PlayerStats.assists).label('avg_assists')
-        ).filter(PlayerStats.user_id == user_id).first()
+    Werkzeug's default pages leak the server identity and look nothing like the
+    app; a JSON client receiving an HTML error body cannot parse the reason.
+    """
+    from flask import jsonify, render_template, request
+    from werkzeug.exceptions import HTTPException
 
-        # Calculate average rating received
-        rating_query = db.session.query(
-            db.func.count(PlayerRating.id).label('total_ratings'),
-            db.func.avg(PlayerRating.rating).label('avg_rating')
-        ).filter(PlayerRating.to_user_id == user_id).first()
+    def wants_json():
+        return request.path.startswith("/api/") or request.accept_mimetypes.best == (
+            "application/json"
+        )
 
-        # Get recent games with stats
-        recent_games = db.session.query(Game, PlayerStats).join(
-            PlayerStats, PlayerStats.game_id == Game.id
-        ).filter(PlayerStats.user_id == user_id).order_by(
-            Game.time.desc()
-        ).limit(10).all()
+    @app.errorhandler(HTTPException)
+    def _http_error(error):
+        if wants_json():
+            return jsonify({"error": error.description, "status": error.code}), error.code
+        return (
+            render_template("error.html", code=error.code, message=error.description),
+            error.code,
+        )
 
-        # Get recent ratings received
-        recent_ratings = db.session.query(PlayerRating, User).join(
-            User, User.id == PlayerRating.from_user_id
-        ).filter(PlayerRating.to_user_id == user_id).order_by(
-            PlayerRating.created_at.desc()
-        ).limit(10).all()
-
-        return render_template("user_profile.html",
-                             user=user,
-                             stats=stats_query,
-                             ratings=rating_query,
-                             recent_games=recent_games,
-                             recent_ratings=recent_ratings)
-
-    # Ensure models are imported so Alembic sees them
-    from app import models
-
-    return app
+    @app.errorhandler(Exception)
+    def _unexpected_error(error):
+        app.logger.exception("unhandled exception", exc_info=error)
+        db.session.rollback()
+        message = "Something went wrong on our end."
+        if wants_json():
+            return jsonify({"error": message, "status": 500}), 500
+        return render_template("error.html", code=500, message=message), 500
