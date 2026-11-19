@@ -54,13 +54,13 @@ app/
   timeutils.py      UTC in storage, the browser's zone at the edges
   logging.py        structlog, request ids, request timing
   cli.py            flask seed, flask cache-clear
-  blueprints/       auth, oauth, courts, games, stats, profiles,
+  blueprints/       auth, oauth, home, courts, games, stats, profiles,
                     leaderboard, api
-  services/         geo, caching, geohash, aggregates
+  services/         geo, caching, geohash, aggregates, listings
   static/           css, js, vendored Leaflet and Chart.js
-  templates/        base.html and 10 pages
+  templates/        base.html, 11 pages and 3 partials
 migrations/         10 revisions, all reversible
-tests/              311 tests
+tests/              370 tests
 benchmarks/         bench_nearby.py
 ```
 
@@ -74,13 +74,13 @@ blueprint.
 |---|---|
 | `GET /` `POST /login` `POST /register` `POST /logout` | password auth |
 | `GET /auth/google` `GET /auth/callback` | Google OAuth |
-| `GET /dashboard` | landing page |
-| `GET /courts` `GET,POST /courts/create` | courts and the map |
-| `GET /games` `GET,POST /games/create` `GET /games/<id>` | games |
+| `GET /dashboard` `GET /dashboard/feed` | the map home, and its game panel alone |
+| `GET /courts` `GET,POST /courts/create` | court list, adding a court |
+| `GET /games` `GET /games/mine` `GET,POST /games/create` `GET /games/<id>` | games |
 | `POST /games/<id>/join` `/leave` | roster changes |
 | `POST /games/<id>/stats` `/rate` | player-reported data |
 | `GET /users/<id>` `GET /leaderboard` | profiles and rankings |
-| `GET /api/v1/games/nearby` `GET /api/v1/courts` | JSON for the front end |
+| `GET /api/v1/games/nearby` `GET /api/v1/courts` | JSON for API clients and the court picker |
 | `GET /healthz` | liveness, checks the database |
 
 ## Stack
@@ -91,9 +91,11 @@ Flask-Limiter, Flask-Caching, structlog, gunicorn.
 
 Data. PostgreSQL 16 with PostGIS 3.4, Redis 7.
 
-Frontend. Jinja templates and about 460 lines of hand-written CSS with no
-framework and no build step. Leaflet and Chart.js are vendored, so the app does
-not depend on a CDN.
+Frontend. Jinja templates, hand-written CSS and a few small scripts, with no
+framework and no build step. The home page is a map of every court with a panel
+of your games and the games coming up. The interface is monochrome, with light
+and dark themes, and the OpenStreetMap tiles are greyscaled in CSS to match.
+Leaflet and Chart.js are vendored, so the app does not depend on a CDN.
 
 Infrastructure. Docker Compose for the app, PostGIS, and Redis. A multi-stage
 Dockerfile that runs as a non-root user. GitHub Actions runs lint, migrations

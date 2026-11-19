@@ -1,8 +1,8 @@
 """JSON API.
 
 Versioned under /api/v1 and kept apart from the HTML blueprints: these responses
-are consumed by the front-end's fetch calls, and their shape is a contract in a
-way a rendered page is not.
+are consumed by fetch calls (the court picker reads /courts) and by API clients,
+and their shape is a contract in a way a rendered page is not.
 """
 
 from flask import Blueprint, jsonify, request
